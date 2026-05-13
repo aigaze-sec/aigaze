@@ -100,6 +100,12 @@ func (we *WatchEngine) Stop() {
 	we.watcher.Close()
 }
 
+// Actions returns the action event channel (implements EventSource).
+func (we *WatchEngine) Actions() <-chan ActionEvent { return we.ActionCh }
+
+// Findings returns the finding event channel (implements EventSource).
+func (we *WatchEngine) Findings() <-chan FindingEvent { return we.FindingCh }
+
 // ActionCount returns the total actions processed.
 func (we *WatchEngine) ActionCount() int {
 	we.mu.Lock()

@@ -139,13 +139,39 @@ func scanCmd() *cobra.Command {
 
 func watchCmd() *cobra.Command {
 	var workspace []string
+	var replayFile string
+	var speed int
 
 	cmd := &cobra.Command{
 		Use:   "watch [path]",
 		Short: "Real-time monitoring of AI agent actions",
-		Long:  "Watches transcript files for new activity and displays a live TUI dashboard.\nWithout PATH, auto-discovers all known transcript locations.",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `Watches transcript files for new activity and displays a live TUI dashboard.
+Without PATH, auto-discovers all known transcript locations.
+
+Use --replay to open a JSONL file in offline mode for post-hoc analysis.`,
+		Args: cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			// Offline replay mode
+			if replayFile != "" {
+				session, err := parser.ParseTranscript(replayFile)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error parsing %s: %v\n", replayFile, err)
+					os.Exit(1)
+				}
+
+				re := watcher.NewReplay(session, workspace, speed)
+				go re.Start()
+
+				model := tui.NewModel(re, 1, true)
+				p := tea.NewProgram(model, tea.WithAltScreen())
+				if _, err := p.Run(); err != nil {
+					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+					os.Exit(1)
+				}
+				return
+			}
+
+			// Real-time mode
 			we, err := watcher.New(workspace)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error creating watcher: %v\n", err)
@@ -170,7 +196,7 @@ func watchCmd() *cobra.Command {
 			go we.Start()
 
 			// Run TUI
-			model := tui.NewModel(we, sessionCount)
+			model := tui.NewModel(we, sessionCount, false)
 			p := tea.NewProgram(model, tea.WithAltScreen())
 			if _, err := p.Run(); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -180,6 +206,8 @@ func watchCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringSliceVar(&workspace, "workspace", nil, "Workspace root path(s)")
+	cmd.Flags().StringVar(&replayFile, "replay", "", "Replay a JSONL transcript file offline in the TUI")
+	cmd.Flags().IntVar(&speed, "speed", 0, "Replay delay in ms between events (0 = instant)")
 	return cmd
 }
 

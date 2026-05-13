@@ -84,20 +84,22 @@ type findingRow struct {
 
 // Model is the bubbletea model for the watch TUI.
 type Model struct {
-	engine      *watcher.WatchEngine
+	engine      watcher.EventSource
 	sessions    int
 	actions     []actionRow
 	findings    []findingRow
 	width       int
 	height      int
 	quitting    bool
+	replayMode  bool
 }
 
-// NewModel creates a new TUI model.
-func NewModel(we *watcher.WatchEngine, sessionCount int) Model {
+// NewModel creates a new TUI model from any EventSource.
+func NewModel(src watcher.EventSource, sessionCount int, replayMode bool) Model {
 	return Model{
-		engine:   we,
-		sessions: sessionCount,
+		engine:     src,
+		sessions:   sessionCount,
+		replayMode: replayMode,
 	}
 }
 
@@ -144,6 +146,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, listenActions(m.engine)
 
+	case replayDoneMsg:
+		// replay finished — keep TUI open for review
+		return m, nil
+
 	case findingMsg:
 		now := time.Now().Format("15:04:05")
 		evidence := msg.finding.Evidence
@@ -183,7 +189,13 @@ func (m Model) View() string {
 	}
 
 	// Title
-	title := titleStyle.Render("  AIGaze Watch — Real-time AI Agent Action Monitor")
+	var titleText string
+	if m.replayMode {
+		titleText = "  AIGaze Watch — Offline Replay"
+	} else {
+		titleText = "  AIGaze Watch — Real-time AI Agent Action Monitor"
+	}
+	title := titleStyle.Render(titleText)
 
 	// Stats bar
 	stats := statsStyle.Width(w).Render(fmt.Sprintf(
@@ -262,16 +274,24 @@ func (m Model) View() string {
 
 // Commands
 
-func listenActions(we *watcher.WatchEngine) tea.Cmd {
+type replayDoneMsg struct{}
+
+func listenActions(src watcher.EventSource) tea.Cmd {
 	return func() tea.Msg {
-		ev := <-we.ActionCh
+		ev, ok := <-src.Actions()
+		if !ok {
+			return replayDoneMsg{}
+		}
 		return actionMsg{sessionID: ev.SessionID, action: ev.Action}
 	}
 }
 
-func listenFindings(we *watcher.WatchEngine) tea.Cmd {
+func listenFindings(src watcher.EventSource) tea.Cmd {
 	return func() tea.Msg {
-		ev := <-we.FindingCh
+		ev, ok := <-src.Findings()
+		if !ok {
+			return replayDoneMsg{}
+		}
 		return findingMsg{sessionID: ev.SessionID, finding: ev.Finding}
 	}
 }
