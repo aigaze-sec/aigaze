@@ -560,7 +560,7 @@
   function classifyToolRisk(actionType) {
     switch (actionType) {
       case "terminal_exec": case "terminal_input": return "high";
-      case "web_fetch": case "file_create": case "file_edit": return "medium";
+      case "network_fetch": case "file_create": case "file_edit": return "medium";
       default: return "safe";
     }
   }

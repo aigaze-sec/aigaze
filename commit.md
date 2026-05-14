@@ -195,3 +195,16 @@ aigaze rule test rules/R100.yaml --should-match fixtures/trigger.jsonl --should-
 - R1/R2/R3/R5 rule tests all pass ✅
 
 ### Status: ✅ Ready to commit (awaiting approval)
+
+## Commit 9: Fix classifyToolRisk bug + Contributing Rules README
+
+### Files:
+- [x] `internal/web/static/app.js` — `classifyToolRisk`: `"web_fetch"` → `"network_fetch"` (matches parser output)
+- [x] `README.md` — Added Contributing Rules section (YAML format, `aigaze rule test`, contribution steps)
+
+### Bug fix:
+- `fetch_webpage` tool was always risk=safe in Tool Access tab
+- Parser returns `"network_fetch"` but `classifyToolRisk()` checked `"web_fetch"`
+- Now correctly classified as medium risk
+
+### Status: ✅ Ready to commit (awaiting approval)

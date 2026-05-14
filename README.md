@@ -171,6 +171,52 @@ GOOS=linux   GOARCH=amd64 go build -o aigaze-linux-amd64   ./cmd/aigaze/
 GOOS=windows GOARCH=amd64 go build -o aigaze-windows.exe   ./cmd/aigaze/
 ```
 
+## Contributing Rules
+
+Detection rules are YAML files in [`rules/builtin/`](rules/builtin/). Community rules go in [`rules/community/`](rules/community/).
+
+### Rule format
+
+```yaml
+id: R100
+name: My Custom Rule
+description: Detects something suspicious
+severity: HIGH          # CRITICAL, HIGH, MEDIUM, LOW
+mitre_technique: T1059
+mitre_name: Command and Scripting Interpreter
+action_types:
+  - terminal_exec
+check: pattern          # pattern, workspace_boundary, url_allowlist
+patterns:
+  - "suspicious_command"
+  - "another\\.pattern"
+```
+
+### Test your rule
+
+Create fixture JSONL files (see `fixtures/` for examples), then:
+
+```bash
+aigaze rule test rules/community/R100-my-rule.yaml \
+  --should-match fixtures/R100-trigger.jsonl \
+  --should-not-match fixtures/R100-safe.jsonl
+```
+
+### List all loaded rules
+
+```bash
+aigaze rule list
+```
+
+### Contribution steps
+
+1. Write a YAML rule in `rules/community/`
+2. Create trigger + safe fixture JSONL files in `fixtures/`
+3. Run `aigaze rule test` — both assertions must pass
+4. Submit a PR
+
+See [`docs/community-rules-roadmap.md`](docs/community-rules-roadmap.md) for the full roadmap and rule layer architecture.
+
 ## License
 
 AGPL-3.0
