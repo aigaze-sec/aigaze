@@ -14,9 +14,10 @@ import (
 	"github.com/aigaze-sec/aigaze/internal/parser"
 	"github.com/aigaze-sec/aigaze/internal/tui"
 	"github.com/aigaze-sec/aigaze/internal/watcher"
+	"github.com/aigaze-sec/aigaze/internal/web"
 )
 
-var version = "0.2.0"
+var version = "0.3.0"
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -28,6 +29,7 @@ func main() {
 	rootCmd.AddCommand(discoverCmd())
 	rootCmd.AddCommand(scanCmd())
 	rootCmd.AddCommand(watchCmd())
+	rootCmd.AddCommand(serveCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -207,6 +209,74 @@ Use --replay to open a JSONL file in offline mode for post-hoc analysis.`,
 
 	cmd.Flags().StringSliceVar(&workspace, "workspace", nil, "Workspace root path(s)")
 	cmd.Flags().StringVar(&replayFile, "replay", "", "Replay a JSONL transcript file offline in the TUI")
+	cmd.Flags().IntVar(&speed, "speed", 0, "Replay delay in ms between events (0 = instant)")
+	return cmd
+}
+
+func serveCmd() *cobra.Command {
+	var workspace []string
+	var replayFile string
+	var speed int
+	var port int
+
+	cmd := &cobra.Command{
+		Use:   "serve [path]",
+		Short: "Start web dashboard for AI agent action monitoring",
+		Long: `Starts an HTTP server with a real-time web dashboard.
+Without PATH, auto-discovers all known transcript locations.
+
+Use --replay to serve a JSONL transcript file for offline analysis.`,
+		Args: cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			var source watcher.EventSource
+			var sessionCount int
+
+			if replayFile != "" {
+				// Offline replay mode
+				session, err := parser.ParseTranscript(replayFile)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error parsing %s: %v\n", replayFile, err)
+					os.Exit(1)
+				}
+				re := watcher.NewReplay(session, workspace, speed)
+				go re.Start()
+				source = re
+				sessionCount = 1
+			} else {
+				// Real-time mode
+				we, err := watcher.New(workspace)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error creating watcher: %v\n", err)
+					os.Exit(1)
+				}
+
+				if len(args) > 0 {
+					if err := we.AddDirectory(args[0]); err != nil {
+						fmt.Fprintf(os.Stderr, "Error watching %s: %v\n", args[0], err)
+						os.Exit(1)
+					}
+					sessionCount = len(findJSONLFiles(args[0]))
+				} else {
+					locations := we.AutoDiscover()
+					for _, loc := range locations {
+						sessionCount += loc.SessionCount
+					}
+				}
+				go we.Start()
+				source = we
+			}
+
+			srv := web.NewServer(source, sessionCount, port)
+			if err := srv.Start(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	cmd.Flags().IntVarP(&port, "port", "p", 8080, "HTTP port")
+	cmd.Flags().StringSliceVar(&workspace, "workspace", nil, "Workspace root path(s)")
+	cmd.Flags().StringVar(&replayFile, "replay", "", "Replay a JSONL transcript file offline")
 	cmd.Flags().IntVar(&speed, "speed", 0, "Replay delay in ms between events (0 = instant)")
 	return cmd
 }

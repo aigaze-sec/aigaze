@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIGaze Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="title">AIGaze Dashboard</div>
+    <div class="badge" id="mode-badge">● Connecting...</div>
+  </header>
+
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat">📡 Sessions: <span id="stat-sessions">0</span></div>
+    <div class="stat">⚡ Actions: <span id="stat-actions">0</span></div>
+    <div class="stat">🛡 Alerts: <span id="stat-findings">0</span></div>
+    <div class="stat">🌐 URLs: <span id="stat-urls">0</span></div>
+    <div class="stat">⚙️ Processes: <span id="stat-procs">0</span></div>
+    <div class="stat">📁 Files: <span id="stat-files">0</span></div>
+    <div class="stat">🔧 Tools: <span id="stat-tools">0</span></div>
+  </div>
+
+  <nav class="tab-bar">
+    <button class="tab active" data-tab="tab-monitor">📡 Live Monitor</button>
+    <button class="tab" data-tab="tab-urls">🌐 URL Access</button>
+    <button class="tab" data-tab="tab-procs">⚙️ Process Access</button>
+    <button class="tab" data-tab="tab-files">📁 File Access</button>
+    <button class="tab" data-tab="tab-tools">🔧 Tool Access</button>
+    <button class="tab" data-tab="tab-overview">📊 Overview</button>
+  </nav>
+
+  <!-- Tab 1: Live Monitor -->
+  <div class="tab-content active" id="tab-monitor">
+    <div class="filter-bar">
+      <button class="filter-toggle" id="filter-toggle" title="Toggle filters">🔍 Filters ▾</button>
+      <span class="filter-count" id="filter-count"></span>
+    </div>
+    <div class="filter-panel" id="filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <span class="filter-icon">🔍</span>
+          <input type="text" id="filter-search" placeholder="Search actions & alerts..." autocomplete="off">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Tool:</label>
+          <select id="filter-tool"><option value="">All</option></select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Severity:</label>
+          <select id="filter-severity">
+            <option value="">All</option>
+            <option value="CRITICAL">CRITICAL</option>
+            <option value="HIGH">HIGH</option>
+            <option value="MEDIUM">MEDIUM</option>
+            <option value="LOW">LOW</option>
+          </select>
+        </div>
+      </div>
+      <div class="filter-row">
+        <div class="filter-group">
+          <label class="filter-label">From:</label>
+          <input type="datetime-local" id="filter-date-from" step="1">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">To:</label>
+          <input type="datetime-local" id="filter-date-to" step="1">
+        </div>
+        <button class="filter-clear" id="filter-clear" title="Clear filters">✕ Clear</button>
+      </div>
+    </div>
+
+    <div class="panels">
+      <div class="panel panel-actions">
+        <div class="panel-header">
+          Actions
+          <label class="follow-toggle">
+            <input type="checkbox" id="action-follow" checked> Auto-follow
+          </label>
+        </div>
+        <div class="panel-table-header">
+          <span class="col-time">Time</span>
+          <span class="col-session">Session</span>
+          <span class="col-tool">Tool</span>
+          <span class="col-target">Target</span>
+        </div>
+        <div class="panel-body" id="action-list"></div>
+      </div>
+
+      <div class="panel panel-findings">
+        <div class="panel-header">
+          🛡 Alerts
+          <label class="follow-toggle">
+            <input type="checkbox" id="finding-follow" checked> Auto-follow
+          </label>
+        </div>
+        <div class="panel-body" id="finding-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 2: URL Access -->
+  <div class="tab-content" id="tab-urls">
+    <div class="url-filter-bar">
+      <div class="filter-group">
+        <span class="filter-icon">🔍</span>
+        <input type="text" id="url-filter-search" placeholder="Search URL / domain..." autocomplete="off">
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Risk:</label>
+        <select id="url-filter-risk">
+          <option value="">All</option>
+          <option value="suspicious">Suspicious</option>
+          <option value="safe">Safe</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Source:</label>
+        <select id="url-filter-source">
+          <option value="">All</option>
+          <option value="fetch_webpage">fetch_webpage</option>
+          <option value="terminal_command">terminal_command</option>
+        </select>
+      </div>
+      <button class="filter-clear" id="url-filter-clear" title="Clear URL filters">✕ Clear</button>
+      <span class="filter-count" id="url-filter-count"></span>
+    </div>
+    <div class="url-summary" id="url-summary"></div>
+    <table class="url-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Risk</th>
+          <th>Domain</th>
+          <th>URL</th>
+          <th>Source</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody id="url-list"></tbody>
+    </table>
+  </div>
+
+  <!-- Tab 3: Process Access -->
+  <div class="tab-content" id="tab-procs">
+    <div class="access-filter-bar">
+      <div class="filter-group">
+        <span class="filter-icon">🔍</span>
+        <input type="text" id="proc-filter-search" placeholder="Search binary / command..." autocomplete="off">
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Risk:</label>
+        <select id="proc-filter-risk">
+          <option value="">All</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="safe">Safe</option>
+        </select>
+      </div>
+      <button class="filter-clear" id="proc-filter-clear" title="Clear">✕ Clear</button>
+      <span class="filter-count" id="proc-filter-count"></span>
+    </div>
+    <div class="proc-summary" id="proc-summary"></div>
+    <table class="access-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Risk</th>
+          <th>Binary</th>
+          <th>Command</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody id="proc-list"></tbody>
+    </table>
+  </div>
+
+  <!-- Tab 4: File Access -->
+  <div class="tab-content" id="tab-files">
+    <div class="access-filter-bar">
+      <div class="filter-group">
+        <span class="filter-icon">🔍</span>
+        <input type="text" id="file-filter-search" placeholder="Search path..." autocomplete="off">
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Operation:</label>
+        <select id="file-filter-op">
+          <option value="">All</option>
+          <option value="read">Read</option>
+          <option value="create">Create</option>
+          <option value="edit">Edit</option>
+          <option value="list">List</option>
+          <option value="search">Search</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Risk:</label>
+        <select id="file-filter-risk">
+          <option value="">All</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="safe">Safe</option>
+        </select>
+      </div>
+      <button class="filter-clear" id="file-filter-clear" title="Clear">✕ Clear</button>
+      <span class="filter-count" id="file-filter-count"></span>
+    </div>
+    <div class="file-summary" id="file-summary"></div>
+    <table class="access-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Operation</th>
+          <th>Risk</th>
+          <th>Path</th>
+          <th>Tool</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody id="file-list"></tbody>
+    </table>
+  </div>
+
+  <!-- Tab 5: Tool Access -->
+  <div class="tab-content" id="tab-tools">
+    <div class="access-filter-bar">
+      <div class="filter-group">
+        <span class="filter-icon">🔍</span>
+        <input type="text" id="tool-filter-search" placeholder="Search tool / target..." autocomplete="off">
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Tool:</label>
+        <select id="tool-filter-name"><option value="">All</option></select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Risk:</label>
+        <select id="tool-filter-risk">
+          <option value="">All</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="safe">Safe</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Action:</label>
+        <select id="tool-filter-action">
+          <option value="">All</option>
+          <option value="file_read">file_read</option>
+          <option value="file_create">file_create</option>
+          <option value="file_edit">file_edit</option>
+          <option value="dir_list">dir_list</option>
+          <option value="file_search">file_search</option>
+          <option value="text_search">text_search</option>
+          <option value="semantic_search">semantic_search</option>
+          <option value="terminal_exec">terminal_exec</option>
+          <option value="terminal_input">terminal_input</option>
+          <option value="web_fetch">web_fetch</option>
+          <option value="unknown">unknown</option>
+        </select>
+      </div>
+      <button class="filter-clear" id="tool-filter-clear" title="Clear">✕ Clear</button>
+      <span class="filter-count" id="tool-filter-count"></span>
+    </div>
+    <div class="tool-summary" id="tool-summary"></div>
+    <table class="access-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Risk</th>
+          <th>Tool</th>
+          <th>Action Type</th>
+          <th>Target</th>
+          <th>Calls</th>
+        </tr>
+      </thead>
+      <tbody id="tool-detail-list"></tbody>
+    </table>
+  </div>
+
+  <!-- Tab 4: Overview (placeholder) -->
+  <div class="tab-content" id="tab-overview">
+    <div class="overview-placeholder">
+      <div class="overview-icon">📊</div>
+      <h3>Overview Dashboard</h3>
+      <p>Coming soon — Risk scoring, trend charts, and session comparison.</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

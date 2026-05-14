@@ -30,6 +30,12 @@ aigaze scan --auto
 
 # Real-time monitoring (TUI dashboard)
 aigaze watch
+
+# Offline replay a specific transcript in TUI
+aigaze watch --replay session.jsonl
+
+# Web dashboard
+aigaze serve
 ```
 
 ## Commands
@@ -75,20 +81,57 @@ Options:
 
 ### `aigaze watch [path]`
 
-Real-time TUI monitoring dashboard:
+Real-time TUI monitoring dashboard with scrollable panels:
 
 ```
   AIGaze Watch — Real-time AI Agent Action Monitor
-  📡 Sessions: 14   │   Actions: 342   │   Alerts: 3
+  📡 Sessions: 14   │   Actions: 342   │   Alerts: 3   │   ↑↓/jk: scroll  tab: switch  f: follow
 
-  Time     Session  Tool                      Target
-  13:42:05 c168902  read_file                 /home/user/.ssh/id_rsa
-  13:42:07 c168902  run_in_terminal           git push origin main
-  13:42:08 c168902  fetch_webpage             https://example.com
-  13:41:55 c168902  read_file                 src/app.py
+  ▸ Actions  Time     Session  Tool                      Target
+             13:42:05 c168902  read_file                 /home/user/.ssh/id_rsa
+             13:42:07 c168902  run_in_terminal           git push origin main
+             13:42:08 c168902  fetch_webpage             https://example.com
+    ↕ 1–25 of 342
 ```
 
 Without a path, auto-discovers and monitors all AI agent transcripts.
+
+**Offline replay mode** — import any JSONL transcript for post-hoc analysis:
+
+```bash
+aigaze watch --replay session.jsonl            # instant replay
+aigaze watch --replay session.jsonl --speed 50 # 50ms delay between events
+```
+
+**Keyboard controls:**
+
+| Key | Action |
+|-----|--------|
+| `j`/`k` or `↑`/`↓` | Scroll up/down |
+| `PgDn`/`PgUp` or `Ctrl+D`/`U` | Half-page jump |
+| `g`/`G` or `Home`/`End` | Jump to top/bottom |
+| `Tab` | Switch focus: Actions ↔ Alerts |
+| `f` | Toggle auto-follow |
+| `c` | Clear screen |
+| `q` | Quit |
+
+### `aigaze serve [path]`
+
+Web-based dashboard with real-time SSE streaming:
+
+```bash
+aigaze serve                          # auto-discover, default port 8080
+aigaze serve --port 3000              # custom port
+aigaze serve --replay session.jsonl   # offline replay in browser
+```
+
+Opens a dark-themed dashboard at `http://localhost:8080` with:
+
+- **Split panels** — Actions stream (left) + Alerts (right)
+- **Auto-follow** — scrolls to bottom on new data, pauses when you scroll up
+- **SSE (Server-Sent Events)** — real-time push, no polling
+- **Late-join support** — new browser tabs load full history
+- **Embedded static files** — no external dependencies, single binary
 
 ## Detection Rules
 

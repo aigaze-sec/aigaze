@@ -30,13 +30,13 @@ type Turn struct {
 
 // Session represents a fully parsed transcript session.
 type Session struct {
-	SessionID     string   `json:"session_id"`
-	Model         string   `json:"model"`
-	CopilotVer    string   `json:"copilot_version"`
-	VSCodeVer     string   `json:"vscode_version"`
-	StartTime     string   `json:"start_time"`
-	Actions       []Action `json:"actions"`
-	Turns         []Turn   `json:"turns"`
+	SessionID  string   `json:"session_id"`
+	Model      string   `json:"model"`
+	CopilotVer string   `json:"copilot_version"`
+	VSCodeVer  string   `json:"vscode_version"`
+	StartTime  string   `json:"start_time"`
+	Actions    []Action `json:"actions"`
+	Turns      []Turn   `json:"turns"`
 }
 
 // ParseTranscript reads a .jsonl transcript file and returns a Session.

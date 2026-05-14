@@ -10,15 +10,16 @@ import (
 
 // Rule defines a single detection rule.
 type Rule struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	Description    string   `json:"description"`
-	Severity       string   `json:"severity"`
-	MITRETechnique string   `json:"mitre_technique"`
-	MITREName      string   `json:"mitre_name"`
-	ActionTypes    []string `json:"action_types"`
-	Patterns       []*regexp.Regexp
-	CheckType      string // "pattern", "workspace_boundary", "url_allowlist"
+	ID                   string   `json:"id"`
+	Name                 string   `json:"name"`
+	Description          string   `json:"description"`
+	Severity             string   `json:"severity"`
+	MITRETechnique       string   `json:"mitre_technique"`
+	MITREName            string   `json:"mitre_name"`
+	ActionTypes          []string `json:"action_types"`
+	Patterns             []*regexp.Regexp
+	CheckType            string // "pattern", "workspace_boundary", "url_allowlist"
+	SuppressPlaceholders bool   // if true, suppress known placeholder matches
 }
 
 // Finding is a single security finding from rule evaluation.
@@ -31,6 +32,7 @@ type Finding struct {
 	MITREName      string `json:"mitre_name"`
 	Tool           string `json:"tool"`
 	ActionType     string `json:"action_type"`
+	Target         string `json:"target"`
 	Evidence       string `json:"evidence"`
 	Timestamp      string `json:"timestamp"`
 	TurnID         string `json:"turn_id"`
@@ -160,7 +162,12 @@ func DefaultRules() []Rule {
 
 // ScanSession scans a session against all rules and returns findings.
 func ScanSession(session *parser.Session, workspaceRoots []string) *ScanResult {
-	rules := DefaultRules()
+	rules, err := LoadAllRules()
+	if err != nil {
+		// Fallback to hardcoded defaults if YAML loading fails
+		rules = DefaultRules()
+	}
+	_ = err
 	result := &ScanResult{
 		SessionID: session.SessionID,
 		Model:     session.Model,
@@ -205,10 +212,10 @@ func checkPatterns(rule *Rule, session *parser.Session, result *ScanResult) {
 					evidence = evidence[:80]
 				}
 
-				// Check for placeholder suppression (R3)
+				// Check for placeholder suppression
 				suppressed := false
 				suppressReason := ""
-				if rule.ID == "R3" {
+				if rule.SuppressPlaceholders {
 					for _, ph := range placeholders {
 						if strings.Contains(matched, ph) {
 							suppressed = true
@@ -232,6 +239,7 @@ func checkPatterns(rule *Rule, session *parser.Session, result *ScanResult) {
 					MITREName:      rule.MITREName,
 					Tool:           action.Tool,
 					ActionType:     action.ActionType,
+					Target:         action.Target,
 					Evidence:       evidence,
 					Timestamp:      action.Timestamp,
 					TurnID:         action.TurnID,
@@ -281,6 +289,7 @@ func checkWorkspaceBoundary(rule *Rule, session *parser.Session, roots []string,
 				MITREName:      rule.MITREName,
 				Tool:           action.Tool,
 				ActionType:     action.ActionType,
+				Target:         action.Target,
 				Evidence:       target,
 				Timestamp:      action.Timestamp,
 				TurnID:         action.TurnID,
@@ -324,6 +333,7 @@ func checkURLAllowlist(rule *Rule, session *parser.Session, result *ScanResult) 
 				MITREName:      rule.MITREName,
 				Tool:           action.Tool,
 				ActionType:     action.ActionType,
+				Target:         action.Target,
 				Evidence:       target,
 				Timestamp:      action.Timestamp,
 				TurnID:         action.TurnID,

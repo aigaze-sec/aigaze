@@ -51,6 +51,13 @@ var (
 			Foreground(lipgloss.Color("240")).
 			Italic(true)
 
+	detailStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("109"))
+
+	rowMatchStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("226")).
+			Bold(true)
+
 	sevCRIT = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")).Render("🔴 CRIT")
 	sevHIGH = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("208")).Render("🟠 HIGH")
 	sevMED  = lipgloss.NewStyle().Foreground(lipgloss.Color("220")).Render("⚠  MED")
@@ -92,13 +99,19 @@ type actionRow struct {
 	sessionID string
 	tool      string
 	target    string
+	detail    map[string]interface{} // full arguments for expand
+	expanded  bool
 }
 
 type findingRow struct {
-	time     string
-	severity string
-	ruleID   string
-	evidence string
+	time        string
+	severity    string
+	ruleID      string
+	evidence    string
+	description string
+	mitre       string
+	tool        string
+	expanded    bool
 }
 
 // Model is the bubbletea model for the watch TUI.
@@ -117,6 +130,16 @@ type Model struct {
 	actionOffset  int  // scroll offset for actions panel
 	findingOffset int  // scroll offset for findings panel
 	autoFollow    bool // auto-scroll to bottom on new data
+
+	// cursor for expand
+	actionCursor  int // index in actions slice
+	findingCursor int // index in findings slice
+
+	// search/filter
+	searchMode            bool
+	searchQuery           string
+	filterIndicesActions  []int // indices into m.actions matching search
+	filterIndicesFindings []int // indices into m.findings matching search
 }
 
 // NewModel creates a new TUI model from any EventSource.
@@ -171,6 +194,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Search mode: capture typed characters
+		if m.searchMode {
+			switch msg.String() {
+			case "esc":
+				m.searchMode = false
+				m.searchQuery = ""
+				m.filterIndicesActions = nil
+				m.filterIndicesFindings = nil
+				return m, nil
+			case "enter":
+				m.searchMode = false
+				// keep filter active, jump to first match
+				if m.focusPanel == panelActions && len(m.filterIndicesActions) > 0 {
+					m.actionCursor = m.filterIndicesActions[0]
+					m.actionOffset = m.actionCursor
+					m.actionOffset = clampOffset(m.actionOffset, len(m.actions), vp)
+				} else if m.focusPanel == panelFindings && len(m.filterIndicesFindings) > 0 {
+					m.findingCursor = m.filterIndicesFindings[0]
+					m.findingOffset = m.findingCursor
+					m.findingOffset = clampOffset(m.findingOffset, len(m.findings), vp)
+				}
+				return m, nil
+			case "backspace":
+				if len(m.searchQuery) > 0 {
+					m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+					updateSearchFilter(&m)
+				}
+				return m, nil
+			default:
+				if len(msg.String()) == 1 {
+					m.searchQuery += msg.String()
+					updateSearchFilter(&m)
+				}
+				return m, nil
+			}
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			m.quitting = true
@@ -190,21 +250,54 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "j", "down":
 			m.autoFollow = false
 			if m.focusPanel == panelActions {
-				m.actionOffset++
+				if m.actionCursor < len(m.actions)-1 {
+					m.actionCursor++
+				}
+				// scroll to keep cursor visible
+				if m.actionCursor >= m.actionOffset+vp {
+					m.actionOffset = m.actionCursor - vp + 1
+				}
 				m.actionOffset = clampOffset(m.actionOffset, len(m.actions), vp)
 			} else {
-				m.findingOffset++
+				if m.findingCursor < len(m.findings)-1 {
+					m.findingCursor++
+				}
+				if m.findingCursor >= m.findingOffset+vp {
+					m.findingOffset = m.findingCursor - vp + 1
+				}
 				m.findingOffset = clampOffset(m.findingOffset, len(m.findings), vp)
 			}
 			return m, nil
 		case "k", "up":
 			m.autoFollow = false
 			if m.focusPanel == panelActions {
-				m.actionOffset--
+				if m.actionCursor > 0 {
+					m.actionCursor--
+				}
+				if m.actionCursor < m.actionOffset {
+					m.actionOffset = m.actionCursor
+				}
 				m.actionOffset = clampOffset(m.actionOffset, len(m.actions), vp)
 			} else {
-				m.findingOffset--
+				if m.findingCursor > 0 {
+					m.findingCursor--
+				}
+				if m.findingCursor < m.findingOffset {
+					m.findingOffset = m.findingCursor
+				}
 				m.findingOffset = clampOffset(m.findingOffset, len(m.findings), vp)
+			}
+			return m, nil
+		case "enter":
+			// Toggle expand on cursor row
+			if m.focusPanel == panelActions && len(m.actions) > 0 {
+				if m.actionCursor >= 0 && m.actionCursor < len(m.actions) {
+					m.actions[m.actionCursor].expanded = !m.actions[m.actionCursor].expanded
+				}
+			} else if m.focusPanel == panelFindings && len(m.findings) > 0 {
+				if m.findingCursor >= 0 && m.findingCursor < len(m.findings) {
+					m.findings[m.findingCursor].expanded = !m.findings[m.findingCursor].expanded
+				}
 			}
 			return m, nil
 		case "pgdown", "ctrl+d":
@@ -247,8 +340,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.autoFollow = true
 			if m.focusPanel == panelActions {
 				m.actionOffset = clampOffset(len(m.actions), len(m.actions), vp)
+				m.actionCursor = len(m.actions) - 1
 			} else {
 				m.findingOffset = clampOffset(len(m.findings), len(m.findings), vp)
+				m.findingCursor = len(m.findings) - 1
 			}
 			return m, nil
 		case "f":
@@ -259,6 +354,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.findingOffset = clampOffset(len(m.findings), len(m.findings), vp)
 			}
 			return m, nil
+		case "/":
+			m.searchMode = true
+			m.searchQuery = ""
+			m.autoFollow = false
+			return m, nil
+		case "esc":
+			// Clear search filter
+			m.searchQuery = ""
+			m.filterIndicesActions = nil
+			m.filterIndicesFindings = nil
+			return m, nil
+		case "n":
+			// Jump to next match
+			jumpToMatch(&m, 1, vp)
+			return m, nil
+		case "N":
+			// Jump to previous match
+			jumpToMatch(&m, -1, vp)
+			return m, nil
 		}
 
 	case tea.WindowSizeMsg:
@@ -267,7 +381,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case actionMsg:
-		now := time.Now().Format("15:04:05")
+		now := time.Now().Format("01-02 15:04:05")
 		target := msg.action.Target
 		if len(target) > 80 {
 			target = target[:80]
@@ -277,6 +391,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			sessionID: msg.sessionID,
 			tool:      msg.action.Tool,
 			target:    target,
+			detail:    msg.action.Arguments,
 		})
 		if len(m.actions) > maxRows {
 			dropped := len(m.actions) - maxRows
@@ -288,6 +403,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.autoFollow {
 			m.actionOffset = clampOffset(len(m.actions), len(m.actions), vp)
+			m.actionCursor = len(m.actions) - 1
 		}
 		return m, listenActions(m.engine)
 
@@ -295,16 +411,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case findingMsg:
-		now := time.Now().Format("15:04:05")
+		now := time.Now().Format("01-02 15:04:05")
 		evidence := msg.finding.Evidence
 		if len(evidence) > 60 {
 			evidence = evidence[:60]
 		}
 		m.findings = append(m.findings, findingRow{
-			time:     now,
-			severity: msg.finding.Severity,
-			ruleID:   msg.finding.RuleID,
-			evidence: evidence,
+			time:        now,
+			severity:    msg.finding.Severity,
+			ruleID:      msg.finding.RuleID,
+			evidence:    evidence,
+			description: msg.finding.Description,
+			mitre:       msg.finding.MITRETechnique + " " + msg.finding.MITREName,
+			tool:        msg.finding.Tool,
 		})
 		if len(m.findings) > maxRows {
 			dropped := len(m.findings) - maxRows
@@ -316,6 +435,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.autoFollow {
 			m.findingOffset = clampOffset(len(m.findings), len(m.findings), vp)
+			m.findingCursor = len(m.findings) - 1
 		}
 		return m, listenFindings(m.engine)
 
@@ -324,6 +444,105 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// updateSearchFilter recalculates the filter indices based on searchQuery.
+func updateSearchFilter(m *Model) {
+	q := strings.ToLower(m.searchQuery)
+	m.filterIndicesActions = nil
+	m.filterIndicesFindings = nil
+	if q == "" {
+		return
+	}
+	for i, row := range m.actions {
+		text := strings.ToLower(row.tool + " " + row.target + " " + row.sessionID)
+		if strings.Contains(text, q) {
+			m.filterIndicesActions = append(m.filterIndicesActions, i)
+		}
+	}
+	for i, row := range m.findings {
+		text := strings.ToLower(row.ruleID + " " + row.severity + " " + row.evidence + " " + row.tool)
+		if strings.Contains(text, q) {
+			m.filterIndicesFindings = append(m.filterIndicesFindings, i)
+		}
+	}
+}
+
+// jumpToMatch moves cursor to next/prev search match. dir=1 forward, dir=-1 backward.
+func jumpToMatch(m *Model, dir int, vp int) {
+	if m.focusPanel == panelActions {
+		indices := m.filterIndicesActions
+		if len(indices) == 0 {
+			return
+		}
+		if dir > 0 {
+			for _, idx := range indices {
+				if idx > m.actionCursor {
+					m.actionCursor = idx
+					m.actionOffset = idx
+					m.actionOffset = clampOffset(m.actionOffset, len(m.actions), vp)
+					return
+				}
+			}
+			// Wrap
+			m.actionCursor = indices[0]
+			m.actionOffset = indices[0]
+			m.actionOffset = clampOffset(m.actionOffset, len(m.actions), vp)
+		} else {
+			for i := len(indices) - 1; i >= 0; i-- {
+				if indices[i] < m.actionCursor {
+					m.actionCursor = indices[i]
+					m.actionOffset = indices[i]
+					m.actionOffset = clampOffset(m.actionOffset, len(m.actions), vp)
+					return
+				}
+			}
+			// Wrap
+			m.actionCursor = indices[len(indices)-1]
+			m.actionOffset = indices[len(indices)-1]
+			m.actionOffset = clampOffset(m.actionOffset, len(m.actions), vp)
+		}
+	} else {
+		indices := m.filterIndicesFindings
+		if len(indices) == 0 {
+			return
+		}
+		if dir > 0 {
+			for _, idx := range indices {
+				if idx > m.findingCursor {
+					m.findingCursor = idx
+					m.findingOffset = idx
+					m.findingOffset = clampOffset(m.findingOffset, len(m.findings), vp)
+					return
+				}
+			}
+			m.findingCursor = indices[0]
+			m.findingOffset = indices[0]
+			m.findingOffset = clampOffset(m.findingOffset, len(m.findings), vp)
+		} else {
+			for i := len(indices) - 1; i >= 0; i-- {
+				if indices[i] < m.findingCursor {
+					m.findingCursor = indices[i]
+					m.findingOffset = indices[i]
+					m.findingOffset = clampOffset(m.findingOffset, len(m.findings), vp)
+					return
+				}
+			}
+			m.findingCursor = indices[len(indices)-1]
+			m.findingOffset = indices[len(indices)-1]
+			m.findingOffset = clampOffset(m.findingOffset, len(m.findings), vp)
+		}
+	}
+}
+
+// isMatchedRow returns true if the row index is in the filter match set.
+func isMatchedRow(indices []int, idx int) bool {
+	for _, i := range indices {
+		if i == idx {
+			return true
+		}
+	}
+	return false
 }
 
 func (m Model) View() string {
@@ -351,12 +570,20 @@ func (m Model) View() string {
 	if m.autoFollow {
 		followTag = "  [auto-follow ON]"
 	}
+	searchTag := ""
+	if m.searchMode {
+		searchTag = fmt.Sprintf("  🔍 /%s▌", m.searchQuery)
+	} else if m.searchQuery != "" {
+		matchCount := len(m.filterIndicesActions) + len(m.filterIndicesFindings)
+		searchTag = fmt.Sprintf("  🔍 \"%s\" (%d matches)  Esc:clear n/N:next/prev", m.searchQuery, matchCount)
+	}
 	stats := statsStyle.Width(w).Render(fmt.Sprintf(
-		"  📡 Sessions: %d   │   Actions: %d   │   Alerts: %d   │   ↑↓/jk: scroll  tab: switch  f: follow  q: quit  c: clear%s",
+		"  📡 Sessions: %d   │   Actions: %d   │   Alerts: %d   │   /: search  ↑↓: scroll  Enter: detail  tab: switch%s%s",
 		m.sessions,
 		m.engine.ActionCount(),
 		m.engine.FindingCount(),
 		followTag,
+		searchTag,
 	))
 
 	// Split panels
@@ -370,7 +597,7 @@ func (m Model) View() string {
 	} else {
 		actHdr = headerStyle.Render("  Actions")
 	}
-	leftHeader := actHdr + "  " + headerStyle.Render(fmt.Sprintf("%-8s %-8s %-25s %s", "Time", "Session", "Tool", "Target"))
+	leftHeader := actHdr + "  " + headerStyle.Render(fmt.Sprintf("%-14s %-8s %-25s %s", "Time", "Session", "Tool", "Target"))
 
 	actionOff := clampOffset(m.actionOffset, len(m.actions), vp)
 	endIdx := actionOff + vp
@@ -378,22 +605,44 @@ func (m Model) View() string {
 		endIdx = len(m.actions)
 	}
 	var leftRows []string
-	for _, row := range m.actions[actionOff:endIdx] {
+	for i := actionOff; i < endIdx; i++ {
+		row := m.actions[i]
 		tool := row.tool
 		if len(tool) > 25 {
 			tool = tool[:25]
 		}
 		target := row.target
-		maxTarget := leftW - 48
+		maxTarget := leftW - 54
 		if maxTarget < 10 {
 			maxTarget = 10
 		}
 		if len(target) > maxTarget {
 			target = target[:maxTarget]
 		}
-		leftRows = append(leftRows, rowStyle.Render(fmt.Sprintf(
-			"  %-8s %-8s %-25s %s", row.time, row.sessionID, tool, target,
-		)))
+		prefix := "  "
+		if i == m.actionCursor && m.focusPanel == panelActions {
+			prefix = "▸ "
+		}
+		expandMark := " "
+		if row.expanded {
+			expandMark = "▾"
+		} else if len(row.detail) > 0 {
+			expandMark = "▸"
+		}
+		line := fmt.Sprintf("%s%s %-14s %-8s %-25s %s", prefix, expandMark, row.time, row.sessionID, tool, target)
+		if i == m.actionCursor && m.focusPanel == panelActions {
+			leftRows = append(leftRows, rowHighlightStyle.Render(line))
+		} else if m.searchQuery != "" && isMatchedRow(m.filterIndicesActions, i) {
+			leftRows = append(leftRows, rowMatchStyle.Render(line))
+		} else {
+			leftRows = append(leftRows, rowStyle.Render(line))
+		}
+		// Render expanded detail
+		if row.expanded && len(row.detail) > 0 {
+			for _, dl := range formatDetail(row.tool, row.detail) {
+				leftRows = append(leftRows, detailStyle.Render("    │ "+dl))
+			}
+		}
 	}
 	// Pad empty lines to fill viewport
 	for len(leftRows) < vp {
@@ -418,7 +667,8 @@ func (m Model) View() string {
 		fEndIdx = len(m.findings)
 	}
 	var rightRows []string
-	for _, row := range m.findings[findingOff:fEndIdx] {
+	for i := findingOff; i < fEndIdx; i++ {
+		row := m.findings[i]
 		evidence := row.evidence
 		maxEvidence := rightW - 25
 		if maxEvidence < 10 {
@@ -427,9 +677,36 @@ func (m Model) View() string {
 		if len(evidence) > maxEvidence {
 			evidence = evidence[:maxEvidence]
 		}
-		rightRows = append(rightRows, fmt.Sprintf(
-			"  %s %s %-4s %s", row.time, sevLabel(row.severity), row.ruleID, evidence,
-		))
+		prefix := "  "
+		if i == m.findingCursor && m.focusPanel == panelFindings {
+			prefix = "▸ "
+		}
+		expandMark := " "
+		if row.expanded {
+			expandMark = "▾"
+		} else if row.description != "" || row.mitre != "" {
+			expandMark = "▸"
+		}
+		line := fmt.Sprintf("%s%s %s %s %-4s %s", prefix, expandMark, row.time, sevLabel(row.severity), row.ruleID, evidence)
+		if i == m.findingCursor && m.focusPanel == panelFindings {
+			rightRows = append(rightRows, rowHighlightStyle.Render(line))
+		} else if m.searchQuery != "" && isMatchedRow(m.filterIndicesFindings, i) {
+			rightRows = append(rightRows, rowMatchStyle.Render(line))
+		} else {
+			rightRows = append(rightRows, line)
+		}
+		// Render expanded detail
+		if row.expanded {
+			if row.description != "" {
+				rightRows = append(rightRows, detailStyle.Render("    │ "+row.description))
+			}
+			if row.mitre != "" && strings.TrimSpace(row.mitre) != "" {
+				rightRows = append(rightRows, detailStyle.Render("    │ MITRE: "+row.mitre))
+			}
+			if row.tool != "" {
+				rightRows = append(rightRows, detailStyle.Render("    │ Tool: "+row.tool))
+			}
+		}
 	}
 	if len(rightRows) == 0 && len(m.findings) == 0 {
 		rightRows = append(rightRows, "  (no alerts)")
@@ -456,6 +733,68 @@ func (m Model) View() string {
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, divBlock, rightBlock)
 
 	return title + "\n" + stats + "\n" + body + "\n"
+}
+
+// formatDetail extracts key fields from action arguments for display.
+func formatDetail(tool string, args map[string]interface{}) []string {
+	var lines []string
+	add := func(label string, val interface{}) {
+		if val == nil {
+			return
+		}
+		s := fmt.Sprintf("%v", val)
+		if len(s) > 120 {
+			s = s[:120] + "..."
+		}
+		lines = append(lines, label+": "+s)
+	}
+
+	switch tool {
+	case "read_file":
+		add("File", args["filePath"])
+		add("Lines", fmt.Sprintf("%v–%v", args["startLine"], args["endLine"]))
+	case "create_file":
+		add("File", args["filePath"])
+		if c, ok := args["content"].(string); ok {
+			if len(c) > 80 {
+				c = c[:80] + "..."
+			}
+			add("Content", c)
+		}
+	case "replace_string_in_file", "multi_replace_string_in_file":
+		add("File", args["filePath"])
+		if os, ok := args["oldString"].(string); ok {
+			if len(os) > 80 {
+				os = os[:80] + "..."
+			}
+			add("Old", os)
+		}
+		if ns, ok := args["newString"].(string); ok {
+			if len(ns) > 80 {
+				ns = ns[:80] + "..."
+			}
+			add("New", ns)
+		}
+	case "run_in_terminal", "send_to_terminal":
+		add("Command", args["command"])
+		add("Goal", args["goal"])
+	case "fetch_webpage":
+		add("URLs", args["urls"])
+		add("Query", args["query"])
+	case "grep_search", "semantic_search":
+		add("Query", args["query"])
+		add("Pattern", args["includePattern"])
+	case "list_dir":
+		add("Path", args["path"])
+	default:
+		for k, v := range args {
+			add(k, v)
+			if len(lines) >= 5 {
+				break
+			}
+		}
+	}
+	return lines
 }
 
 // scrollIndicator returns a line like "  ↕ 1-25 of 142"
