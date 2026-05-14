@@ -141,9 +141,6 @@ func (we *WatchEngine) processFile(path string) {
 	}
 
 	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
-	if len(sessionID) > 12 {
-		sessionID = sessionID[:12]
-	}
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 256*1024), 10*1024*1024)

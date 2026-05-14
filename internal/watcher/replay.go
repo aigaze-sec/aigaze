@@ -73,9 +73,6 @@ func (re *ReplayEngine) SessionCount() int { return 1 }
 // When replay finishes, channels remain open so the TUI stays up for review.
 func (re *ReplayEngine) Start() {
 	sessionID := re.session.SessionID
-	if len(sessionID) > 12 {
-		sessionID = sessionID[:12]
-	}
 
 	// Scan the full session once for findings
 	result := engine.ScanSession(re.session, re.workspaceRoots)

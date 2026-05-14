@@ -3,6 +3,7 @@ package parser
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,16 +42,38 @@ type Session struct {
 
 // ParseTranscript reads a .jsonl transcript file and returns a Session.
 func ParseTranscript(path string) (*Session, error) {
+	sessions, err := ParseMultiSession(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(sessions) == 0 {
+		return &Session{SessionID: strings.TrimSuffix(filepath.Base(path), ".jsonl")}, nil
+	}
+	// Merge all sessions into one for backward compatibility
+	merged := sessions[0]
+	for i := 1; i < len(sessions); i++ {
+		merged.Actions = append(merged.Actions, sessions[i].Actions...)
+		merged.Turns = append(merged.Turns, sessions[i].Turns...)
+	}
+	return merged, nil
+}
+
+// ParseMultiSession reads a .jsonl transcript file and returns one Session per
+// session.start event found. If no session.start is found, the entire file is
+// returned as a single session.
+func ParseMultiSession(path string) ([]*Session, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
-	sess := &Session{SessionID: sessionID}
-
+	fileID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	var sessions []*Session
+	var sess *Session
 	var currentTurn *Turn
+	sessionIdx := 0
+
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024) // 10MB line buffer
 
@@ -71,6 +94,19 @@ func ParseTranscript(path string) (*Session, error) {
 
 		switch evType {
 		case "session.start":
+			// Close previous session's unclosed turn
+			if sess != nil && currentTurn != nil {
+				sess.Turns = append(sess.Turns, *currentTurn)
+				currentTurn = nil
+			}
+			// Start new session
+			sessionIdx++
+			sid := fileID
+			if sessionIdx > 1 {
+				sid = fmt.Sprintf("%s#%d", fileID, sessionIdx)
+			}
+			sess = &Session{SessionID: sid}
+			sessions = append(sessions, sess)
 			if data != nil {
 				sess.Model, _ = data["model"].(string)
 				sess.StartTime = timestamp
@@ -81,6 +117,11 @@ func ParseTranscript(path string) (*Session, error) {
 			}
 
 		case "assistant.turn_start":
+			// Ensure we have a session
+			if sess == nil {
+				sess = &Session{SessionID: fileID}
+				sessions = append(sessions, sess)
+			}
 			turnID := ""
 			if data != nil {
 				turnID, _ = data["turnId"].(string)
@@ -156,11 +197,16 @@ func ParseTranscript(path string) (*Session, error) {
 	}
 
 	// If there's an unclosed turn
-	if currentTurn != nil {
+	if sess != nil && currentTurn != nil {
 		sess.Turns = append(sess.Turns, *currentTurn)
 	}
 
-	return sess, scanner.Err()
+	// If no session.start was found, return file as single session
+	if len(sessions) == 0 {
+		sessions = append(sessions, &Session{SessionID: fileID})
+	}
+
+	return sessions, scanner.Err()
 }
 
 func extractTarget(tool string, args map[string]interface{}) string {

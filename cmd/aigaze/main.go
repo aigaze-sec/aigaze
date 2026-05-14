@@ -216,7 +216,8 @@ Use --replay to open a JSONL file in offline mode for post-hoc analysis.`,
 
 func serveCmd() *cobra.Command {
 	var workspace []string
-	var replayFile string
+	var replayFiles []string
+	var replayDir string
 	var speed int
 	var port int
 
@@ -226,23 +227,38 @@ func serveCmd() *cobra.Command {
 		Long: `Starts an HTTP server with a real-time web dashboard.
 Without PATH, auto-discovers all known transcript locations.
 
-Use --replay to serve a JSONL transcript file for offline analysis.`,
+Use --replay to serve a JSONL transcript file for offline analysis.
+Use multiple --replay flags or --replay-dir to load multiple sessions.`,
 		Args: cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			var source watcher.EventSource
 			var sessionCount int
 
-			if replayFile != "" {
-				// Offline replay mode
-				session, err := parser.ParseTranscript(replayFile)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error parsing %s: %v\n", replayFile, err)
+			// Collect all replay files
+			allFiles := append([]string{}, replayFiles...)
+			if replayDir != "" {
+				allFiles = append(allFiles, findJSONLFiles(replayDir)...)
+			}
+
+			if len(allFiles) > 0 {
+				// Multi-session replay mode
+				var allSessions []*parser.Session
+				for _, f := range allFiles {
+					sessions, err := parser.ParseMultiSession(f)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "Error parsing %s: %v\n", f, err)
+						continue
+					}
+					allSessions = append(allSessions, sessions...)
+				}
+				if len(allSessions) == 0 {
+					fmt.Fprintln(os.Stderr, "No sessions found in replay files.")
 					os.Exit(1)
 				}
-				re := watcher.NewReplay(session, workspace, speed)
-				go re.Start()
-				source = re
-				sessionCount = 1
+				sessionCount = len(allSessions)
+				multi := watcher.NewMultiReplay(allSessions, workspace, speed)
+				go multi.Start()
+				source = multi
 			} else {
 				// Real-time mode
 				we, err := watcher.New(workspace)
@@ -277,7 +293,8 @@ Use --replay to serve a JSONL transcript file for offline analysis.`,
 
 	cmd.Flags().IntVarP(&port, "port", "p", 8080, "HTTP port")
 	cmd.Flags().StringSliceVar(&workspace, "workspace", nil, "Workspace root path(s)")
-	cmd.Flags().StringVar(&replayFile, "replay", "", "Replay a JSONL transcript file offline")
+	cmd.Flags().StringArrayVar(&replayFiles, "replay", nil, "Replay JSONL transcript file(s) offline (repeatable)")
+	cmd.Flags().StringVar(&replayDir, "replay-dir", "", "Replay all JSONL files in a directory")
 	cmd.Flags().IntVar(&speed, "speed", 0, "Replay delay in ms between events (0 = instant)")
 	return cmd
 }

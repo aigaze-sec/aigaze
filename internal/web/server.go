@@ -30,6 +30,7 @@ type actionJSON struct {
 
 type findingJSON struct {
 	Time        string `json:"time"`
+	SessionID   string `json:"session_id"`
 	Severity    string `json:"severity"`
 	RuleID      string `json:"rule_id"`
 	RuleName    string `json:"rule_name"`
@@ -43,6 +44,7 @@ type findingJSON struct {
 
 type urlJSON struct {
 	Time       string   `json:"time"`
+	SessionID  string   `json:"session_id"`
 	URL        string   `json:"url"`
 	Domain     string   `json:"domain"`
 	Source     string   `json:"source"`
@@ -87,7 +89,7 @@ func NewServer(source watcher.EventSource, sessions int, port int) *Server {
 		port:       port,
 		clients:    make(map[*sseClient]bool),
 		urlSeen:    make(map[string]bool),
-		maxHistory: 500,
+		maxHistory: 2000,
 	}
 }
 
@@ -115,6 +117,9 @@ func (s *Server) Start() error {
 	// REST: get URL access history
 	mux.HandleFunc("/api/urls", s.handleURLs)
 
+	// REST: get session list (multi-session support)
+	mux.HandleFunc("/api/sessions", s.handleSessions)
+
 	addr := fmt.Sprintf(":%d", s.port)
 	fmt.Printf("AIGaze Web Dashboard → http://localhost%s\n", addr)
 	return http.ListenAndServe(addr, mux)
@@ -127,6 +132,15 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		Actions:  s.source.ActionCount(),
 		Findings: s.source.FindingCount(),
 	})
+}
+
+func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if lister, ok := s.source.(watcher.SessionLister); ok {
+		json.NewEncoder(w).Encode(lister.Sessions())
+	} else {
+		json.NewEncoder(w).Encode([]struct{}{})
+	}
 }
 
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
@@ -230,7 +244,7 @@ func (s *Server) relayActions() {
 		}
 		aj := actionJSON{
 			Time:       time.Now().Format("2006-01-02 15:04:05"),
-			SessionID:  truncateSessionID(ev.SessionID),
+			SessionID:  ev.SessionID,
 			Tool:       ev.Action.Tool,
 			Target:     target,
 			ActionType: ev.Action.ActionType,
@@ -248,7 +262,7 @@ func (s *Server) relayActions() {
 
 		// Extract URLs from this action
 		now := aj.Time
-		s.extractAndBroadcastURLs(ev.Action.Tool, ev.Action.Arguments, ev.Action.Target, ev.Action.Content, now)
+		s.extractAndBroadcastURLs(ev.Action.Tool, ev.Action.Arguments, ev.Action.Target, ev.Action.Content, now, ev.SessionID)
 	}
 }
 
@@ -260,6 +274,7 @@ func (s *Server) relayFindings() {
 		}
 		fj := findingJSON{
 			Time:        time.Now().Format("2006-01-02 15:04:05"),
+			SessionID:   ev.SessionID,
 			Severity:    ev.Finding.Severity,
 			RuleID:      ev.Finding.RuleID,
 			RuleName:    ev.Finding.RuleName,
@@ -451,7 +466,7 @@ func classifyURLWeb(rawURL string, domain string) (bool, []string) {
 	return len(reasons) > 0, reasons
 }
 
-func (s *Server) extractAndBroadcastURLs(tool string, args map[string]interface{}, target string, content string, ts string) {
+func (s *Server) extractAndBroadcastURLs(tool string, args map[string]interface{}, target string, content string, ts string, sessionID string) {
 	var rawURLs []string
 	var source string
 
@@ -499,6 +514,7 @@ func (s *Server) extractAndBroadcastURLs(tool string, args map[string]interface{
 
 		uj := urlJSON{
 			Time:       ts,
+			SessionID:  sessionID,
 			URL:        rawURL,
 			Domain:     domain,
 			Source:     source,

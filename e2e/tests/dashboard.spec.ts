@@ -53,6 +53,19 @@ async function clickIfExists(page: Page, selector: string) {
   }
 }
 
+// Open a collapsible filter panel by clicking its toggle button
+async function openFilterPanel(page: Page, toggleSelector: string, panelSelector: string) {
+  const panel = page.locator(panelSelector);
+  const isOpen = await panel.evaluate((el) => el.classList.contains("open"));
+  if (!isOpen) {
+    await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      if (el) (el as HTMLElement).click();
+    }, toggleSelector);
+    await page.waitForTimeout(200);
+  }
+}
+
 // Try to expand first visible data row and verify detail shows
 async function testRowExpand(
   page: Page,
@@ -296,6 +309,9 @@ test.describe("AIGaze Dashboard UI", () => {
     await page.waitForTimeout(300);
     const errors: string[] = [];
 
+    // Open filter panel
+    await openFilterPanel(page, "#url-filter-toggle", "#url-filter-panel");
+
     // Search
     await cycleSearch(page, "#url-filter-search", "github");
 
@@ -322,6 +338,7 @@ test.describe("AIGaze Dashboard UI", () => {
     await page.waitForTimeout(300);
     const errors: string[] = [];
 
+    await openFilterPanel(page, "#proc-filter-toggle", "#proc-filter-panel");
     await cycleSearch(page, "#proc-filter-search", "python");
     await cycleSelect(page, "#proc-filter-risk", errors);
     await clickIfExists(page, "#proc-filter-clear");
@@ -336,6 +353,7 @@ test.describe("AIGaze Dashboard UI", () => {
     await page.waitForTimeout(300);
     const errors: string[] = [];
 
+    await openFilterPanel(page, "#proc-filter-toggle", "#proc-filter-panel");
     await testExpandPerRisk(
       page,
       "#proc-list",
@@ -355,6 +373,7 @@ test.describe("AIGaze Dashboard UI", () => {
     await page.waitForTimeout(300);
     const errors: string[] = [];
 
+    await openFilterPanel(page, "#file-filter-toggle", "#file-filter-panel");
     await cycleSearch(page, "#file-filter-search", ".env");
     await cycleSelect(page, "#file-filter-op", errors);
     await cycleSelect(page, "#file-filter-risk", errors);
@@ -370,6 +389,7 @@ test.describe("AIGaze Dashboard UI", () => {
     await page.waitForTimeout(300);
     const errors: string[] = [];
 
+    await openFilterPanel(page, "#file-filter-toggle", "#file-filter-panel");
     await testExpandPerRisk(
       page,
       "#file-list",
@@ -386,6 +406,8 @@ test.describe("AIGaze Dashboard UI", () => {
     await page.click('[data-tab="tab-files"]');
     await page.waitForTimeout(300);
     const errors: string[] = [];
+
+    await openFilterPanel(page, "#file-filter-toggle", "#file-filter-panel");
 
     const ops = ["", "read", "create", "edit", "list", "search"];
     const risks = ["", "critical", "high", "medium", "safe"];
@@ -418,6 +440,7 @@ test.describe("AIGaze Dashboard UI", () => {
     await page.waitForTimeout(300);
     const errors: string[] = [];
 
+    await openFilterPanel(page, "#tool-filter-toggle", "#tool-filter-panel");
     await cycleSearch(page, "#tool-filter-search", "read_file");
     await cycleSelect(page, "#tool-filter-name", errors);
     await cycleSelect(page, "#tool-filter-risk", errors);
@@ -434,6 +457,7 @@ test.describe("AIGaze Dashboard UI", () => {
     await page.waitForTimeout(300);
     const errors: string[] = [];
 
+    await openFilterPanel(page, "#tool-filter-toggle", "#tool-filter-panel");
     await testExpandPerRisk(
       page,
       "#tool-detail-list",
@@ -452,6 +476,8 @@ test.describe("AIGaze Dashboard UI", () => {
     await page.click('[data-tab="tab-tools"]');
     await page.waitForTimeout(300);
     const errors: string[] = [];
+
+    await openFilterPanel(page, "#tool-filter-toggle", "#tool-filter-panel");
 
     // Get dynamic tool options
     const toolValues = await page
@@ -503,6 +529,7 @@ test.describe("AIGaze Dashboard UI", () => {
     // Set a filter on Process tab
     await page.click('[data-tab="tab-procs"]');
     await page.waitForTimeout(200);
+    await openFilterPanel(page, "#proc-filter-toggle", "#proc-filter-panel");
     await page.locator("#proc-filter-risk").selectOption("high");
     await page.waitForTimeout(200);
 
@@ -511,6 +538,9 @@ test.describe("AIGaze Dashboard UI", () => {
     await page.waitForTimeout(200);
     await page.click('[data-tab="tab-procs"]');
     await page.waitForTimeout(200);
+
+    // Re-open filter panel (may have closed on tab switch)
+    await openFilterPanel(page, "#proc-filter-toggle", "#proc-filter-panel");
 
     // Filter should still be set
     const val = await page.locator("#proc-filter-risk").inputValue();
@@ -557,5 +587,166 @@ test.describe("AIGaze Dashboard UI", () => {
       10
     );
     expect(actions).toBeGreaterThan(0);
+  });
+
+  // ── Session Sidebar ──
+
+  test("session sidebar lists all sessions", async ({ page }) => {
+    const sidebar = page.locator(".session-sidebar");
+    await expect(sidebar).toBeVisible();
+
+    // "All Sessions" item should always exist
+    const allItem = page.locator('.session-item[data-session="all"]');
+    await expect(allItem).toBeVisible();
+
+    // With multi-session replay, there should be at least 2 session items
+    const sessionItems = page.locator(".session-item");
+    const count = await sessionItems.count();
+    expect(count).toBeGreaterThanOrEqual(2); // "All Sessions" + at least 1 session
+
+    expect(jsErrors).toEqual([]);
+  });
+
+  test("clicking a session filters stats and content", async ({ page }) => {
+    // Get global stats first
+    const globalActions = parseInt(
+      (await page.locator("#stat-actions").textContent()) || "0",
+      10
+    );
+
+    // Find a real session item (not "All Sessions")
+    const sessionItems = page.locator('.session-item:not([data-session="all"])');
+    const sessionCount = await sessionItems.count();
+    if (sessionCount === 0) return; // skip if single-session
+
+    // Click the first session using evaluate (Playwright .click() times out on sidebar)
+    const firstSessionId = await sessionItems.first().getAttribute("data-session");
+    await page.evaluate((sid) => {
+      const el = document.querySelector(`.session-item[data-session="${sid}"]`);
+      if (el) (el as HTMLElement).click();
+    }, firstSessionId);
+    await page.waitForTimeout(300);
+
+    // The clicked session should now be active
+    const activeItem = page.locator(".session-item.active");
+    await expect(activeItem).toHaveCount(1);
+    const activeSession = await activeItem.getAttribute("data-session");
+    expect(activeSession).toBe(firstSessionId);
+
+    // Stats should reflect filtered data (actions <= global)
+    const filteredActions = parseInt(
+      (await page.locator("#stat-actions").textContent()) || "0",
+      10
+    );
+    expect(filteredActions).toBeLessThanOrEqual(globalActions);
+
+    expect(jsErrors).toEqual([]);
+  });
+
+  test("clicking All Sessions restores global view", async ({ page }) => {
+    // First click a specific session
+    const sessionItems = page.locator('.session-item:not([data-session="all"])');
+    const sessionCount = await sessionItems.count();
+    if (sessionCount === 0) return;
+
+    const firstSessionId = await sessionItems.first().getAttribute("data-session");
+    await page.evaluate((sid) => {
+      const el = document.querySelector(`.session-item[data-session="${sid}"]`);
+      if (el) (el as HTMLElement).click();
+    }, firstSessionId);
+    await page.waitForTimeout(300);
+
+    // Remember filtered stats
+    const filteredActions = parseInt(
+      (await page.locator("#stat-actions").textContent()) || "0",
+      10
+    );
+
+    // Click "All Sessions"
+    await page.evaluate(() => {
+      const el = document.querySelector('.session-item[data-session="all"]');
+      if (el) (el as HTMLElement).click();
+    });
+    await page.waitForTimeout(300);
+
+    // "All Sessions" should be active
+    const activeItem = page.locator(".session-item.active");
+    const activeSession = await activeItem.getAttribute("data-session");
+    expect(activeSession).toBe("all");
+
+    // Global stats should be >= filtered
+    const globalActions = parseInt(
+      (await page.locator("#stat-actions").textContent()) || "0",
+      10
+    );
+    expect(globalActions).toBeGreaterThanOrEqual(filteredActions);
+
+    expect(jsErrors).toEqual([]);
+  });
+
+  test("session sidebar shows badges with severity", async ({ page }) => {
+    const badges = page.locator(".session-item .session-badge");
+    const count = await badges.count();
+    // At least "All Sessions" should have a badge
+    expect(count).toBeGreaterThanOrEqual(1);
+
+    // Check that each badge has severity-based styling (class or text)
+    for (let i = 0; i < count; i++) {
+      const text = await badges.nth(i).textContent();
+      expect(text?.trim().length).toBeGreaterThan(0);
+    }
+
+    expect(jsErrors).toEqual([]);
+  });
+
+  // ── Collapsible Filter Toggles ──
+
+  test("filter toggle works on all tabs", async ({ page }) => {
+    const tabs = [
+      { tab: "tab-monitor", toggle: "#filter-toggle", panel: "#filter-panel" },
+      { tab: "tab-urls", toggle: "#url-filter-toggle", panel: "#url-filter-panel" },
+      { tab: "tab-procs", toggle: "#proc-filter-toggle", panel: "#proc-filter-panel" },
+      { tab: "tab-files", toggle: "#file-filter-toggle", panel: "#file-filter-panel" },
+      { tab: "tab-tools", toggle: "#tool-filter-toggle", panel: "#tool-filter-panel" },
+    ];
+
+    for (const { tab, toggle, panel } of tabs) {
+      await page.click(`[data-tab="${tab}"]`);
+      await page.waitForTimeout(200);
+
+      const panelEl = page.locator(panel);
+
+      // Initially closed
+      const initiallyOpen = await panelEl.evaluate((el) =>
+        el.classList.contains("open")
+      );
+      expect(initiallyOpen, `${panel} should start closed`).toBe(false);
+
+      // Click toggle to open
+      await page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        if (el) (el as HTMLElement).click();
+      }, toggle);
+      await page.waitForTimeout(200);
+
+      const nowOpen = await panelEl.evaluate((el) =>
+        el.classList.contains("open")
+      );
+      expect(nowOpen, `${panel} should be open after click`).toBe(true);
+
+      // Click toggle again to close
+      await page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        if (el) (el as HTMLElement).click();
+      }, toggle);
+      await page.waitForTimeout(200);
+
+      const closedAgain = await panelEl.evaluate((el) =>
+        el.classList.contains("open")
+      );
+      expect(closedAgain, `${panel} should close on second click`).toBe(false);
+    }
+
+    expect(jsErrors).toEqual([]);
   });
 });

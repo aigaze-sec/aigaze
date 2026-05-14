@@ -31,6 +31,20 @@
     <button class="tab" data-tab="tab-tools">🔧 Tool Access</button>
   </nav>
 
+  <div class="main-layout">
+    <!-- Session sidebar -->
+    <aside class="session-sidebar" id="session-sidebar">
+      <div class="sidebar-header">Sessions</div>
+      <div class="session-list" id="session-list">
+        <div class="session-item active" data-session="all">
+          <span class="session-label">All Sessions</span>
+          <span class="session-meta" id="sidebar-all-meta"></span>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main-content">
+
   <!-- Tab 1: Live Monitor -->
   <div class="tab-content" id="tab-monitor">
     <div class="filter-bar">
@@ -102,29 +116,34 @@
 
   <!-- Tab 2: URL Access -->
   <div class="tab-content" id="tab-urls">
-    <div class="url-filter-bar">
-      <div class="filter-group">
-        <span class="filter-icon">🔍</span>
-        <input type="text" id="url-filter-search" placeholder="Search URL / domain..." autocomplete="off">
-      </div>
-      <div class="filter-group">
-        <label class="filter-label">Risk:</label>
-        <select id="url-filter-risk">
-          <option value="">All</option>
-          <option value="suspicious">Suspicious</option>
-          <option value="safe">Safe</option>
-        </select>
-      </div>
-      <div class="filter-group">
-        <label class="filter-label">Source:</label>
-        <select id="url-filter-source">
-          <option value="">All</option>
-          <option value="fetch_webpage">fetch_webpage</option>
-          <option value="terminal_command">terminal_command</option>
-        </select>
-      </div>
-      <button class="filter-clear" id="url-filter-clear" title="Clear URL filters">✕ Clear</button>
+    <div class="filter-bar">
+      <button class="filter-toggle" id="url-filter-toggle" title="Toggle filters">🔍 Filters ▾</button>
       <span class="filter-count" id="url-filter-count"></span>
+    </div>
+    <div class="filter-panel" id="url-filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <span class="filter-icon">🔍</span>
+          <input type="text" id="url-filter-search" placeholder="Search URL / domain..." autocomplete="off">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Risk:</label>
+          <select id="url-filter-risk">
+            <option value="">All</option>
+            <option value="suspicious">Suspicious</option>
+            <option value="safe">Safe</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Source:</label>
+          <select id="url-filter-source">
+            <option value="">All</option>
+            <option value="fetch_webpage">fetch_webpage</option>
+            <option value="terminal_command">terminal_command</option>
+          </select>
+        </div>
+        <button class="filter-clear" id="url-filter-clear" title="Clear URL filters">✕ Clear</button>
+      </div>
     </div>
     <div class="url-summary" id="url-summary"></div>
     <table class="url-table">
@@ -144,23 +163,28 @@
 
   <!-- Tab 3: Process Access -->
   <div class="tab-content" id="tab-procs">
-    <div class="access-filter-bar">
-      <div class="filter-group">
-        <span class="filter-icon">🔍</span>
-        <input type="text" id="proc-filter-search" placeholder="Search binary / command..." autocomplete="off">
-      </div>
-      <div class="filter-group">
-        <label class="filter-label">Risk:</label>
-        <select id="proc-filter-risk">
-          <option value="">All</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="safe">Safe</option>
-        </select>
-      </div>
-      <button class="filter-clear" id="proc-filter-clear" title="Clear">✕ Clear</button>
+    <div class="filter-bar">
+      <button class="filter-toggle" id="proc-filter-toggle" title="Toggle filters">🔍 Filters ▾</button>
       <span class="filter-count" id="proc-filter-count"></span>
+    </div>
+    <div class="filter-panel" id="proc-filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <span class="filter-icon">🔍</span>
+          <input type="text" id="proc-filter-search" placeholder="Search binary / command..." autocomplete="off">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Risk:</label>
+          <select id="proc-filter-risk">
+            <option value="">All</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="safe">Safe</option>
+          </select>
+        </div>
+        <button class="filter-clear" id="proc-filter-clear" title="Clear">✕ Clear</button>
+      </div>
     </div>
     <div class="proc-summary" id="proc-summary"></div>
     <table class="access-table">
@@ -179,34 +203,39 @@
 
   <!-- Tab 4: File Access -->
   <div class="tab-content" id="tab-files">
-    <div class="access-filter-bar">
-      <div class="filter-group">
-        <span class="filter-icon">🔍</span>
-        <input type="text" id="file-filter-search" placeholder="Search path..." autocomplete="off">
-      </div>
-      <div class="filter-group">
-        <label class="filter-label">Operation:</label>
-        <select id="file-filter-op">
-          <option value="">All</option>
-          <option value="read">Read</option>
-          <option value="create">Create</option>
-          <option value="edit">Edit</option>
-          <option value="list">List</option>
-          <option value="search">Search</option>
-        </select>
-      </div>
-      <div class="filter-group">
-        <label class="filter-label">Risk:</label>
-        <select id="file-filter-risk">
-          <option value="">All</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="safe">Safe</option>
-        </select>
-      </div>
-      <button class="filter-clear" id="file-filter-clear" title="Clear">✕ Clear</button>
+    <div class="filter-bar">
+      <button class="filter-toggle" id="file-filter-toggle" title="Toggle filters">🔍 Filters ▾</button>
       <span class="filter-count" id="file-filter-count"></span>
+    </div>
+    <div class="filter-panel" id="file-filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <span class="filter-icon">🔍</span>
+          <input type="text" id="file-filter-search" placeholder="Search path..." autocomplete="off">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Operation:</label>
+          <select id="file-filter-op">
+            <option value="">All</option>
+            <option value="read">Read</option>
+            <option value="create">Create</option>
+            <option value="edit">Edit</option>
+            <option value="list">List</option>
+            <option value="search">Search</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Risk:</label>
+          <select id="file-filter-risk">
+            <option value="">All</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="safe">Safe</option>
+          </select>
+        </div>
+        <button class="filter-clear" id="file-filter-clear" title="Clear">✕ Clear</button>
+      </div>
     </div>
     <div class="file-summary" id="file-summary"></div>
     <table class="access-table">
@@ -226,44 +255,51 @@
 
   <!-- Tab 5: Tool Access -->
   <div class="tab-content" id="tab-tools">
-    <div class="access-filter-bar">
-      <div class="filter-group">
-        <span class="filter-icon">🔍</span>
-        <input type="text" id="tool-filter-search" placeholder="Search tool / target..." autocomplete="off">
-      </div>
-      <div class="filter-group">
-        <label class="filter-label">Tool:</label>
-        <select id="tool-filter-name"><option value="">All</option></select>
-      </div>
-      <div class="filter-group">
-        <label class="filter-label">Risk:</label>
-        <select id="tool-filter-risk">
-          <option value="">All</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="safe">Safe</option>
-        </select>
-      </div>
-      <div class="filter-group">
-        <label class="filter-label">Action:</label>
-        <select id="tool-filter-action">
-          <option value="">All</option>
-          <option value="file_read">file_read</option>
-          <option value="file_create">file_create</option>
-          <option value="file_edit">file_edit</option>
-          <option value="dir_list">dir_list</option>
-          <option value="file_search">file_search</option>
-          <option value="text_search">text_search</option>
-          <option value="semantic_search">semantic_search</option>
-          <option value="terminal_exec">terminal_exec</option>
-          <option value="terminal_input">terminal_input</option>
-          <option value="web_fetch">web_fetch</option>
-          <option value="unknown">unknown</option>
-        </select>
-      </div>
-      <button class="filter-clear" id="tool-filter-clear" title="Clear">✕ Clear</button>
+    <div class="filter-bar">
+      <button class="filter-toggle" id="tool-filter-toggle" title="Toggle filters">🔍 Filters ▾</button>
       <span class="filter-count" id="tool-filter-count"></span>
+    </div>
+    <div class="filter-panel" id="tool-filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <span class="filter-icon">🔍</span>
+          <input type="text" id="tool-filter-search" placeholder="Search tool / target..." autocomplete="off">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Tool:</label>
+          <select id="tool-filter-name"><option value="">All</option></select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Risk:</label>
+          <select id="tool-filter-risk">
+            <option value="">All</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="safe">Safe</option>
+          </select>
+        </div>
+      </div>
+      <div class="filter-row">
+        <div class="filter-group">
+          <label class="filter-label">Action:</label>
+          <select id="tool-filter-action">
+            <option value="">All</option>
+            <option value="file_read">file_read</option>
+            <option value="file_create">file_create</option>
+            <option value="file_edit">file_edit</option>
+            <option value="dir_list">dir_list</option>
+            <option value="file_search">file_search</option>
+            <option value="text_search">text_search</option>
+            <option value="semantic_search">semantic_search</option>
+            <option value="terminal_exec">terminal_exec</option>
+            <option value="terminal_input">terminal_input</option>
+            <option value="web_fetch">web_fetch</option>
+            <option value="unknown">unknown</option>
+          </select>
+        </div>
+        <button class="filter-clear" id="tool-filter-clear" title="Clear">✕ Clear</button>
+      </div>
     </div>
     <div class="tool-summary" id="tool-summary"></div>
     <table class="access-table">
@@ -341,7 +377,9 @@
         <tbody id="ov-findings-list"></tbody>
       </table>
     </div>
-  </div>
+  </div> <!-- /tab-overview -->
+  </div> <!-- /main-content -->
+  </div> <!-- /main-layout -->
 
   <script src="app.js"></script>
 </body>

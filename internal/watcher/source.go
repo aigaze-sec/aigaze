@@ -9,3 +9,9 @@ type EventSource interface {
 	FindingCount() int
 	Stop()
 }
+
+// SessionLister is optionally implemented by EventSource implementations
+// that can enumerate their sessions (e.g. MultiReplayEngine).
+type SessionLister interface {
+	Sessions() []SessionMeta
+}

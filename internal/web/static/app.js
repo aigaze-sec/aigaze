@@ -1,6 +1,188 @@
 (function () {
   "use strict";
 
+  // --- Session filter state ---
+  var currentSessionFilter = "all"; // "all" or a session_id
+  var knownSessions = {}; // session_id -> { actions, findings, maxSev }
+  var sessionSidebar = null; // set after DOM ready
+  var sessionListEl = null;
+  var preloadedSessionData = {}; // session_id -> { actions, findings } from /api/sessions
+
+  function getSessionDisplay(sid) {
+    if (!sid) return "—";
+    if (sid.length > 12) return sid.substring(0, 12);
+    return sid;
+  }
+
+  function registerSession(sid) {
+    if (!sid || knownSessions[sid]) return;
+    knownSessions[sid] = { actions: 0, findings: 0, maxSev: "", urls: 0, procs: 0, files: 0, tools: 0, model: "", startTime: "" };
+    addSessionToSidebar(sid);
+    // Show sidebar if we have more than 1 session
+    if (Object.keys(knownSessions).length > 1 && sessionSidebar) {
+      sessionSidebar.classList.remove("hidden");
+    }
+  }
+
+  function addSessionToSidebar(sid) {
+    if (!sessionListEl) return;
+    var item = document.createElement("div");
+    item.className = "session-item";
+    item.setAttribute("data-session", sid);
+    var info = knownSessions[sid] || {};
+    var subtitleParts = [];
+    if (info.model) subtitleParts.push(info.model);
+    if (info.startTime) {
+      var d = new Date(info.startTime);
+      if (!isNaN(d.getTime())) subtitleParts.push(d.toLocaleString());
+    }
+    var subtitle = subtitleParts.length ? '<div class="session-subtitle">' + esc(subtitleParts.join(" \u00b7 ")) + '</div>' : '';
+    item.innerHTML =
+      '<span class="session-label">' + esc(getSessionDisplay(sid)) + '</span>' +
+      subtitle +
+      '<span class="session-meta"></span>';
+    item.addEventListener("click", function () {
+      switchSession(sid);
+    });
+    sessionListEl.appendChild(item);
+  }
+
+  function updateSessionMeta(sid) {
+    if (!sessionListEl) return;
+    var info = knownSessions[sid];
+    if (!info) return;
+    var item = sessionListEl.querySelector('[data-session="' + sid + '"]');
+    if (!item) return;
+    var meta = item.querySelector(".session-meta");
+    if (!meta) return;
+    var parts = [];
+    parts.push(info.actions + " acts");
+    if (info.findings > 0) parts.push(info.findings + " finds");
+    var badge = "";
+    if (info.maxSev === "CRITICAL") badge = '<span class="session-badge sev-CRITICAL">CRIT</span>';
+    else if (info.maxSev === "HIGH") badge = '<span class="session-badge sev-HIGH">HIGH</span>';
+    else if (info.findings > 0) badge = '<span class="session-badge sev-warn">' + info.findings + '</span>';
+    else badge = '<span class="session-badge sev-ok">✓</span>';
+    meta.innerHTML = parts.join(", ") + " " + badge;
+  }
+
+  function updateAllMeta() {
+    // Update "All Sessions" meta
+    var totalActs = 0, totalFinds = 0, maxSev = "";
+    Object.keys(knownSessions).forEach(function (sid) {
+      totalActs += knownSessions[sid].actions;
+      totalFinds += knownSessions[sid].findings;
+      var sp = sevPriority(knownSessions[sid].maxSev);
+      if (sp < sevPriority(maxSev)) maxSev = knownSessions[sid].maxSev;
+    });
+    var allMeta = document.getElementById("sidebar-all-meta");
+    if (allMeta) {
+      var parts = [];
+      parts.push(totalActs + " acts");
+      if (totalFinds > 0) parts.push(totalFinds + " finds");
+      var badge = "";
+      if (maxSev === "CRITICAL") badge = '<span class="session-badge sev-CRITICAL">CRIT</span>';
+      else if (maxSev === "HIGH") badge = '<span class="session-badge sev-HIGH">HIGH</span>';
+      else if (totalFinds > 0) badge = '<span class="session-badge sev-warn">' + totalFinds + '</span>';
+      else badge = '<span class="session-badge sev-ok">✓</span>';
+      allMeta.innerHTML = parts.join(", ") + " " + badge;
+    }
+  }
+
+  function switchSession(sid) {
+    currentSessionFilter = sid;
+    // Update sidebar active state
+    if (sessionListEl) {
+      sessionListEl.querySelectorAll(".session-item").forEach(function (el) {
+        el.classList.toggle("active", el.getAttribute("data-session") === sid);
+      });
+    }
+    applySessionFilter();
+  }
+
+  function applySessionFilter() {
+    var isAll = currentSessionFilter === "all";
+
+    // Filter all rows with data-session attribute across all tabs
+    document.querySelectorAll("[data-session]").forEach(function (el) {
+      if (el.classList.contains("session-item")) return; // skip sidebar items
+      if (isAll) {
+        el.classList.remove("session-hidden");
+      } else {
+        var elSession = el.getAttribute("data-session");
+        if (elSession === currentSessionFilter) {
+          el.classList.remove("session-hidden");
+        } else {
+          el.classList.add("session-hidden");
+        }
+      }
+      // Also handle table detail rows
+      var next = el.nextElementSibling;
+      if (next && next.classList.contains("table-detail-row")) {
+        if (isAll || el.getAttribute("data-session") === currentSessionFilter) {
+          // Keep detail visibility as-is (controlled by expand toggle)
+        } else {
+          next.style.display = "none";
+        }
+      }
+    });
+
+    // Recount visible stats
+    recountFilteredStats();
+  }
+
+  function recountFilteredStats() {
+    var isAll = currentSessionFilter === "all";
+    if (isAll) {
+      // Restore full counts — overview cards
+      ovActions.textContent = ovActionCount;
+      ovFindings.textContent = ovFindingCount;
+      ovCritical.textContent = ovSevCounts.CRITICAL;
+      ovHigh.textContent = ovSevCounts.HIGH;
+      ovMedium.textContent = ovSevCounts.MEDIUM;
+      ovLow.textContent = ovSevCounts.LOW;
+      // Restore full counts — stats bar
+      statSessions.textContent = Object.keys(knownSessions).length || globalSessionCount;
+      statActions.textContent = globalActionCount;
+      statFindings.textContent = globalFindingCount;
+      statUrls.textContent = urlTotal;
+      statProcs.textContent = procTotal;
+      statFiles.textContent = fileTotal;
+      statTools.textContent = toolTotal;
+    } else {
+      var info = knownSessions[currentSessionFilter] || {};
+      // Overview cards
+      ovActions.textContent = info.actions || 0;
+      ovFindings.textContent = info.findings || 0;
+      var sevs = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+      ovFindingsList.querySelectorAll("tr:not(.table-detail-row)").forEach(function (tr) {
+        if (tr.classList.contains("session-hidden")) return;
+        var sevTd = tr.querySelector("td:nth-child(2)");
+        if (sevTd) {
+          var s = sevTd.textContent.trim();
+          if (sevs[s] !== undefined) sevs[s]++;
+        }
+      });
+      ovCritical.textContent = sevs.CRITICAL;
+      ovHigh.textContent = sevs.HIGH;
+      ovMedium.textContent = sevs.MEDIUM;
+      ovLow.textContent = sevs.LOW;
+      // Stats bar — show per-session counts
+      statSessions.textContent = "1";
+      statActions.textContent = info.actions || 0;
+      statFindings.textContent = info.findings || 0;
+      statUrls.textContent = info.urls || 0;
+      statProcs.textContent = info.procs || 0;
+      statFiles.textContent = info.files || 0;
+      statTools.textContent = info.tools || 0;
+    }
+  }
+
+  // Global counters for stats bar (always reflect total)
+  var globalSessionCount = 0;
+  var globalActionCount = 0;
+  var globalFindingCount = 0;
+
   // DOM refs
   const statSessions = document.getElementById("stat-sessions");
   const statActions = document.getElementById("stat-actions");
@@ -27,6 +209,8 @@
   const urlFilterSource = document.getElementById("url-filter-source");
   const urlFilterClear = document.getElementById("url-filter-clear");
   const urlFilterCount = document.getElementById("url-filter-count");
+  const urlFilterToggle = document.getElementById("url-filter-toggle");
+  const urlFilterPanel = document.getElementById("url-filter-panel");
   const statTools = document.getElementById("stat-tools");
   const toolDetailList = document.getElementById("tool-detail-list");
   const toolSummaryEl = document.getElementById("tool-summary");
@@ -36,6 +220,8 @@
   const toolFilterRisk = document.getElementById("tool-filter-risk");
   const toolFilterClear = document.getElementById("tool-filter-clear");
   const toolFilterCount = document.getElementById("tool-filter-count");
+  const toolFilterToggle = document.getElementById("tool-filter-toggle");
+  const toolFilterPanel = document.getElementById("tool-filter-panel");
   // Process Access
   const statProcs = document.getElementById("stat-procs");
   const procList = document.getElementById("proc-list");
@@ -44,6 +230,8 @@
   const procFilterRisk = document.getElementById("proc-filter-risk");
   const procFilterClear = document.getElementById("proc-filter-clear");
   const procFilterCount = document.getElementById("proc-filter-count");
+  const procFilterToggle = document.getElementById("proc-filter-toggle");
+  const procFilterPanel = document.getElementById("proc-filter-panel");
   // File Access
   const statFiles = document.getElementById("stat-files");
   const fileList = document.getElementById("file-list");
@@ -53,6 +241,8 @@
   const fileFilterRisk = document.getElementById("file-filter-risk");
   const fileFilterClear = document.getElementById("file-filter-clear");
   const fileFilterCount = document.getElementById("file-filter-count");
+  const fileFilterToggle = document.getElementById("file-filter-toggle");
+  const fileFilterPanel = document.getElementById("file-filter-panel");
 
   // --- Tab switching ---
   var tabs = document.querySelectorAll(".tab-bar .tab");
@@ -73,6 +263,22 @@
       ? "🔍 Filters ▴"
       : "🔍 Filters ▾";
   });
+
+  // Toggle filter panels for other tabs
+  function setupFilterToggle(toggle, panel) {
+    if (!toggle || !panel) return;
+    toggle.addEventListener("click", function () {
+      panel.classList.toggle("open");
+      toggle.classList.toggle("active");
+      toggle.textContent = panel.classList.contains("open")
+        ? "🔍 Filters ▴"
+        : "🔍 Filters ▾";
+    });
+  }
+  setupFilterToggle(urlFilterToggle, urlFilterPanel);
+  setupFilterToggle(procFilterToggle, procFilterPanel);
+  setupFilterToggle(fileFilterToggle, fileFilterPanel);
+  setupFilterToggle(toolFilterToggle, toolFilterPanel);
 
   let actionAutoFollow = true;
   let findingAutoFollow = true;
@@ -303,14 +509,27 @@
   }
 
   // --- Rendering ---
-  var MAX_ROWS = 500;
+  var MAX_ROWS = 2000;
 
   function addAction(a) {
     registerTool(a.tool);
+    var sid = a.session_id || "";
+    registerSession(sid);
+    globalActionCount++;
+    if (knownSessions[sid]) {
+      knownSessions[sid].actions++;
+      updateSessionMeta(sid);
+      updateAllMeta();
+    }
+    // Update stats bar
+    if (currentSessionFilter === "all" || sid === currentSessionFilter) {
+      statActions.textContent = currentSessionFilter === "all" ? globalActionCount : (knownSessions[sid] ? knownSessions[sid].actions : 0);
+    }
     var row = document.createElement("div");
     row.className = "action-row";
     row.setAttribute("data-tool", a.tool || "");
     row.setAttribute("data-time", a.time || "");
+    row.setAttribute("data-session", sid);
     row.setAttribute("data-searchtext", [a.tool, a.target, a.session_id, a.time].join(" "));
     var detailHTML = renderDetail(a.detail);
     var expandIcon = detailHTML ? '<span class="expand-icon">▸</span>' : '<span class="expand-icon-spacer"></span>';
@@ -349,6 +568,11 @@
       if (!show) row.classList.add("hidden");
     }
 
+    // Apply session filter
+    if (currentSessionFilter !== "all" && sid !== currentSessionFilter) {
+      row.classList.add("session-hidden");
+    }
+
     actionList.appendChild(row);
 
     // Track tool usage
@@ -370,10 +594,27 @@
   }
 
   function addFinding(f) {
+    var sid = f.session_id || "";
+    registerSession(sid);
+    globalFindingCount++;
+    if (knownSessions[sid]) {
+      knownSessions[sid].findings++;
+      var sev = f.severity || "";
+      if (!knownSessions[sid].maxSev || sevPriority(sev) < sevPriority(knownSessions[sid].maxSev)) {
+        knownSessions[sid].maxSev = sev;
+      }
+      updateSessionMeta(sid);
+      updateAllMeta();
+    }
+    // Update stats bar
+    if (currentSessionFilter === "all" || sid === currentSessionFilter) {
+      statFindings.textContent = currentSessionFilter === "all" ? globalFindingCount : (knownSessions[sid] ? knownSessions[sid].findings : 0);
+    }
     var row = document.createElement("div");
     row.className = "finding-row";
     row.setAttribute("data-severity", f.severity || "");
     row.setAttribute("data-time", f.time || "");
+    row.setAttribute("data-session", sid);
     row.setAttribute("data-searchtext", [f.severity, f.rule_id, f.rule_name, f.evidence, f.tool].join(" "));
     var detailHTML = renderFindingDetail(f);
     var expandIcon = detailHTML ? '<span class="expand-icon">▸</span>' : '<span class="expand-icon-spacer"></span>';
@@ -412,6 +653,11 @@
       if (!show) row.classList.add("hidden");
     }
 
+    // Apply session filter
+    if (currentSessionFilter !== "all" && sid !== currentSessionFilter) {
+      row.classList.add("session-hidden");
+    }
+
     findingList.appendChild(row);
 
     while (findingList.children.length > MAX_ROWS) {
@@ -443,6 +689,7 @@
   }
 
   function updateStats(s) {
+    globalSessionCount = s.sessions;
     statSessions.textContent = s.sessions;
     statActions.textContent = s.actions;
     statFindings.textContent = s.findings;
@@ -514,7 +761,18 @@
     if (u.suspicious) urlSuspicious++;
     updateURLSummary();
 
+    var sid = u.session_id || "";
+    registerSession(sid);
+    if (knownSessions[sid]) {
+      knownSessions[sid].urls++;
+    }
+    // Update stats bar
+    if (currentSessionFilter === "all" || sid === currentSessionFilter) {
+      statUrls.textContent = currentSessionFilter === "all" ? urlTotal : (knownSessions[sid] ? knownSessions[sid].urls : 0);
+    }
+
     var tr = document.createElement("tr");
+    tr.setAttribute("data-session", sid);
     var riskClass = u.suspicious ? "risk-suspicious" : "risk-safe";
     var riskText = u.suspicious ? "⚠ Suspicious" : "✓ Safe";
     var riskVal = u.suspicious ? "suspicious" : "safe";
@@ -586,6 +844,7 @@
     var target = a.target || "";
     var actionType = a.action_type || "";
     var risk = classifyToolRisk(actionType);
+    var sid = a.session_id || "";
 
     registerToolFilter(tool);
 
@@ -596,7 +855,11 @@
     toolStats[tool]++;
     toolTotal++;
 
-    statTools.textContent = toolTotal;
+    if (knownSessions[sid]) knownSessions[sid].tools++;
+    // Update stats bar
+    if (currentSessionFilter === "all" || sid === currentSessionFilter) {
+      statTools.textContent = currentSessionFilter === "all" ? toolTotal : (knownSessions[sid] ? knownSessions[sid].tools : 0);
+    }
     toolSummaryEl.textContent = toolTotal + " tool calls across " + toolDistinct + " distinct tools";
 
     var targetDisplay = target.length > 80 ? target.substring(0, 80) + "…" : target;
@@ -608,6 +871,7 @@
     tr.setAttribute("data-tool", tool);
     tr.setAttribute("data-action", actionType);
     tr.setAttribute("data-risk", risk);
+    tr.setAttribute("data-session", a.session_id || "");
     tr.innerHTML =
       '<td>' + esc(ts) + '</td>' +
       '<td class="' + riskClass + '">' + riskLabel + '</td>' +
@@ -744,6 +1008,7 @@
     if (a.detail && a.detail.command) cmd = a.detail.command;
     else if (a.target) cmd = a.target;
     if (!cmd) return;
+    var sid = a.session_id || "";
 
     // Handle chained commands (&&, |)
     var segments = cmd.split(/\s*(?:&&|\|)\s*/);
@@ -756,7 +1021,11 @@
 
       procTotal++;
       if (cls.risk !== "safe") procSuspicious++;
-      statProcs.textContent = procTotal;
+      if (knownSessions[sid]) knownSessions[sid].procs++;
+      // Update stats bar
+      if (currentSessionFilter === "all" || sid === currentSessionFilter) {
+        statProcs.textContent = currentSessionFilter === "all" ? procTotal : (knownSessions[sid] ? knownSessions[sid].procs : 0);
+      }
       procSummaryEl.textContent = procTotal + " processes observed, " + procSuspicious + " flagged";
 
       // Overview
@@ -769,6 +1038,7 @@
 
       tr.setAttribute("data-searchtext", [bin, cmd, cls.reason].join(" "));
       tr.setAttribute("data-risk", cls.risk);
+      tr.setAttribute("data-session", a.session_id || "");
       tr.innerHTML =
         '<td>' + esc(a.time) + '</td>' +
         '<td class="' + riskClass + '">' + riskLabel + '</td>' +
@@ -878,11 +1148,16 @@
 
     var path = a.target || "";
     if (!path) return;
+    var sid = a.session_id || "";
 
     fileTotal++;
     var cls = classifyFileAccess(path, op);
     if (cls.risk !== "safe") fileSuspicious++;
-    statFiles.textContent = fileTotal;
+    if (knownSessions[sid]) knownSessions[sid].files++;
+    // Update stats bar
+    if (currentSessionFilter === "all" || sid === currentSessionFilter) {
+      statFiles.textContent = currentSessionFilter === "all" ? fileTotal : (knownSessions[sid] ? knownSessions[sid].files : 0);
+    }
     fileSummaryEl.textContent = fileTotal + " file operations, " + fileSuspicious + " flagged";
 
     // Overview
@@ -897,6 +1172,7 @@
     tr.setAttribute("data-searchtext", [path, op, a.tool, cls.reason].join(" "));
     tr.setAttribute("data-op", op);
     tr.setAttribute("data-risk", cls.risk);
+    tr.setAttribute("data-session", a.session_id || "");
     tr.innerHTML =
       '<td>' + esc(a.time) + '</td>' +
       '<td class="' + opClass + '">' + op.toUpperCase() + '</td>' +
@@ -1145,6 +1421,16 @@
     return esc(s).replace(/"/g, "&quot;");
   }
 
+  function sevPriority(sev) {
+    switch (sev) {
+      case "CRITICAL": return 0;
+      case "HIGH": return 1;
+      case "MEDIUM": return 2;
+      case "LOW": return 3;
+      default: return 9;
+    }
+  }
+
   // --- Overview tab ---
   var ovActions = document.getElementById("ov-actions");
   var ovFindings = document.getElementById("ov-findings");
@@ -1267,7 +1553,9 @@
     var empty = ovFindingsList.querySelector(".ov-empty");
     if (empty) empty.closest("tr").remove();
 
+    var sid = f.session_id || "";
     var tr = document.createElement("tr");
+    tr.setAttribute("data-session", sid);
     var ev = f.evidence || "";
     if (ev.length > 60) ev = ev.substring(0, 60) + "...";
     tr.innerHTML = '<td>' + esc(f.time) + '</td>'
@@ -1294,6 +1582,11 @@
       }
     }
     if (!inserted) ovFindingsList.appendChild(tr);
+
+    // Apply session filter
+    if (currentSessionFilter !== "all" && sid !== currentSessionFilter) {
+      tr.classList.add("session-hidden");
+    }
 
     var detail = {
       rule_id: f.rule_id, rule_name: f.rule_name, severity: f.severity,
@@ -1323,6 +1616,9 @@
         if (data.urls) {
           data.urls.forEach(addURL);
         }
+        // After history loads, restore authoritative counts from /api/sessions
+        // because history is a truncated subset and addAction/addFinding over-counted
+        restorePreloadedCounts();
       })
       .catch(function () {});
 
@@ -1330,6 +1626,29 @@
       .then(function (r) { return r.json(); })
       .then(updateStats)
       .catch(function () {});
+  }
+
+  function restorePreloadedCounts() {
+    var totalActs = 0, totalFinds = 0;
+    Object.keys(preloadedSessionData).forEach(function (sid) {
+      if (knownSessions[sid]) {
+        knownSessions[sid].actions = preloadedSessionData[sid].actions;
+        knownSessions[sid].findings = preloadedSessionData[sid].findings;
+      }
+      totalActs += preloadedSessionData[sid].actions;
+      totalFinds += preloadedSessionData[sid].findings;
+    });
+    if (totalActs > 0) {
+      globalActionCount = totalActs;
+      globalFindingCount = totalFinds;
+      statActions.textContent = globalActionCount;
+      statFindings.textContent = globalFindingCount;
+    }
+    Object.keys(knownSessions).forEach(function (sid) {
+      updateSessionMeta(sid);
+    });
+    updateAllMeta();
+    recountFilteredStats();
   }
 
   // --- SSE connection ---
@@ -1357,11 +1676,9 @@
       switch (msg.type) {
         case "action":
           addAction(msg.payload);
-          statActions.textContent = parseInt(statActions.textContent || "0", 10) + 1;
           break;
         case "finding":
           addFinding(msg.payload);
-          statFindings.textContent = parseInt(statFindings.textContent || "0", 10) + 1;
           break;
         case "url":
           addURL(msg.payload);
@@ -1374,6 +1691,65 @@
   }
 
   // --- Init ---
-  loadHistory();
-  connectSSE();
+  sessionSidebar = document.getElementById("session-sidebar");
+  sessionListEl = document.getElementById("session-list");
+
+  // "All" item click handler
+  var allItem = sessionListEl.querySelector('[data-session="all"]');
+  if (allItem) {
+    allItem.addEventListener("click", function () {
+      switchSession("all");
+    });
+  }
+
+  // Hide sidebar by default (show when multi-session detected)
+  if (sessionSidebar) sessionSidebar.classList.add("hidden");
+
+  // Load sessions from API (for multi-replay), then history, then SSE
+  fetch("/api/sessions")
+    .then(function (r) { return r.json(); })
+    .then(function (sessions) {
+      if (sessions && sessions.length > 1) {
+        sessions.forEach(function (s) {
+          registerSession(s.session_id);
+          // Preload authoritative counts from backend
+          preloadedSessionData[s.session_id] = { actions: s.actions || 0, findings: s.findings || 0 };
+          if (knownSessions[s.session_id]) {
+            knownSessions[s.session_id].model = s.model || "";
+            knownSessions[s.session_id].startTime = s.start_time || "";
+            knownSessions[s.session_id].actions = s.actions || 0;
+            knownSessions[s.session_id].findings = s.findings || 0;
+            globalActionCount += s.actions || 0;
+            globalFindingCount += s.findings || 0;
+            updateSessionMeta(s.session_id);
+          }
+          // Inject subtitle with model/time if available
+          var el = sessionListEl ? sessionListEl.querySelector('[data-session="' + s.session_id + '"]') : null;
+          if (el && !el.querySelector('.session-subtitle')) {
+            var parts = [];
+            if (s.model) parts.push(s.model);
+            if (s.start_time) {
+              var d = new Date(s.start_time);
+              if (!isNaN(d.getTime())) parts.push(d.toLocaleString());
+            }
+            if (parts.length) {
+              var sub = document.createElement('div');
+              sub.className = 'session-subtitle';
+              sub.textContent = parts.join(' \u00b7 ');
+              el.insertBefore(sub, el.querySelector('.session-meta'));
+            }
+          }
+        });
+        updateAllMeta();
+        statActions.textContent = globalActionCount;
+        statFindings.textContent = globalFindingCount;
+        statSessions.textContent = Object.keys(knownSessions).length;
+        if (sessionSidebar) sessionSidebar.classList.remove("hidden");
+      }
+    })
+    .catch(function () {})
+    .finally(function () {
+      loadHistory();
+      connectSSE();
+    });
 })();
