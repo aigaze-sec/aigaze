@@ -175,3 +175,23 @@ aigaze rule test rules/R100.yaml --should-match fixtures/trigger.jsonl --should-
 - R5 test: PASS should-match (2 findings), PASS should-not-match (0) ✅
 
 ### Status: ✅ Ready to commit (awaiting approval)
+
+## Commit 8: Move rule YAMLs to repo root `rules/`
+
+### Files:
+- [x] `rules/builtin/R1-R5*.yaml` — moved from `internal/engine/rules/builtin/`
+- [x] `rules/embed.go` — new `rules` package with `//go:embed builtin/*.yaml`
+- [x] `internal/engine/loader.go` — import `rules.BuiltinFS` instead of local embed
+- [x] Removed `internal/engine/rules/` directory
+
+### Why:
+- YAML rules were hidden inside `internal/engine/rules/builtin/`
+- Now at `rules/builtin/` — visible in repo root alongside `rules/community/`
+- `//go:embed` requires same-package files, so created `rules` package as embed host
+
+### Verified:
+- `go build` ✅
+- `aigaze rule list` — 5 rules ✅
+- R1/R2/R3/R5 rule tests all pass ✅
+
+### Status: ✅ Ready to commit (awaiting approval)

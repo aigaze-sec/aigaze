@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"embed"
 	"fmt"
 	"io/fs"
 	"os"
@@ -9,11 +8,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/aigaze-sec/aigaze/rules"
 	"gopkg.in/yaml.v3"
 )
-
-//go:embed rules/builtin/*.yaml
-var builtinRulesFS embed.FS
 
 // RuleYAML is the YAML schema for a detection rule.
 type RuleYAML struct {
@@ -56,7 +53,7 @@ func parseRuleYAML(ry RuleYAML) (Rule, error) {
 
 // LoadBuiltinRules loads the embedded YAML rules from rules/builtin/.
 func LoadBuiltinRules() ([]Rule, error) {
-	return loadRulesFromFS(builtinRulesFS, "rules/builtin")
+	return loadRulesFromFS(rules.BuiltinFS, "builtin")
 }
 
 // LoadExternalRules loads YAML rules from a filesystem directory.
