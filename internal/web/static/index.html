@@ -23,16 +23,16 @@
   </div>
 
   <nav class="tab-bar">
-    <button class="tab active" data-tab="tab-monitor">📡 Live Monitor</button>
+    <button class="tab active" data-tab="tab-overview">📊 Overview</button>
+    <button class="tab" data-tab="tab-monitor">📡 Live Monitor</button>
     <button class="tab" data-tab="tab-urls">🌐 URL Access</button>
     <button class="tab" data-tab="tab-procs">⚙️ Process Access</button>
     <button class="tab" data-tab="tab-files">📁 File Access</button>
     <button class="tab" data-tab="tab-tools">🔧 Tool Access</button>
-    <button class="tab" data-tab="tab-overview">📊 Overview</button>
   </nav>
 
   <!-- Tab 1: Live Monitor -->
-  <div class="tab-content active" id="tab-monitor">
+  <div class="tab-content" id="tab-monitor">
     <div class="filter-bar">
       <button class="filter-toggle" id="filter-toggle" title="Toggle filters">🔍 Filters ▾</button>
       <span class="filter-count" id="filter-count"></span>
@@ -281,12 +281,65 @@
     </table>
   </div>
 
-  <!-- Tab 4: Overview (placeholder) -->
-  <div class="tab-content" id="tab-overview">
-    <div class="overview-placeholder">
-      <div class="overview-icon">📊</div>
-      <h3>Overview Dashboard</h3>
-      <p>Coming soon — Risk scoring, trend charts, and session comparison.</p>
+  <!-- Tab 6: Overview -->
+  <div class="tab-content active" id="tab-overview">
+    <div class="overview-cards">
+      <div class="ov-card">
+        <div class="ov-card-value" id="ov-actions">0</div>
+        <div class="ov-card-label">Actions</div>
+      </div>
+      <div class="ov-card">
+        <div class="ov-card-value" id="ov-findings">0</div>
+        <div class="ov-card-label">Findings</div>
+      </div>
+      <div class="ov-card ov-risk-critical">
+        <div class="ov-card-value" id="ov-critical">0</div>
+        <div class="ov-card-label">Critical</div>
+      </div>
+      <div class="ov-card ov-risk-high">
+        <div class="ov-card-value" id="ov-high">0</div>
+        <div class="ov-card-label">High</div>
+      </div>
+      <div class="ov-card ov-risk-medium">
+        <div class="ov-card-value" id="ov-medium">0</div>
+        <div class="ov-card-label">Medium</div>
+      </div>
+      <div class="ov-card ov-risk-safe">
+        <div class="ov-card-value" id="ov-low">0</div>
+        <div class="ov-card-label">Low</div>
+      </div>
+    </div>
+
+    <div class="overview-lists">
+      <div class="ov-list-section">
+        <h4>Top Riskiest Files</h4>
+        <table class="ov-table">
+          <thead><tr><th>Risk</th><th>Path</th><th>Op</th></tr></thead>
+          <tbody id="ov-top-files"></tbody>
+        </table>
+      </div>
+      <div class="ov-list-section">
+        <h4>Top Riskiest Processes</h4>
+        <table class="ov-table">
+          <thead><tr><th>Risk</th><th>Binary</th><th>Command</th></tr></thead>
+          <tbody id="ov-top-procs"></tbody>
+        </table>
+      </div>
+      <div class="ov-list-section">
+        <h4>Most Used Tools</h4>
+        <table class="ov-table">
+          <thead><tr><th>Tool</th><th>Calls</th></tr></thead>
+          <tbody id="ov-top-tools"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="ov-findings-section">
+      <h4>All Findings</h4>
+      <table class="ov-table ov-findings-table">
+        <thead><tr><th>Time</th><th>Severity</th><th>Rule</th><th>Tool</th><th>Evidence</th></tr></thead>
+        <tbody id="ov-findings-list"></tbody>
+      </table>
     </div>
   </div>
 

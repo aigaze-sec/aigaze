@@ -803,29 +803,119 @@ header {
 }
 
 /* Overview tab */
-.overview-placeholder {
+#tab-overview {
+  overflow-y: auto;
+}
+
+.overview-cards {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  min-height: 300px;
-  color: var(--text-dim);
-  text-align: center;
   gap: 12px;
+  padding: 16px 0;
+  flex-wrap: wrap;
 }
 
-.overview-icon {
-  font-size: 48px;
+.ov-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 24px;
+  text-align: center;
+  min-width: 100px;
+  flex: 1;
 }
 
-.overview-placeholder h3 {
+.ov-card-value {
+  font-size: 28px;
+  font-weight: 700;
+  font-family: var(--font-mono);
   color: var(--text);
-  font-size: 18px;
 }
 
-.overview-placeholder p {
+.ov-card-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ov-risk-critical .ov-card-value { color: var(--crit); }
+.ov-risk-high .ov-card-value { color: var(--high); }
+.ov-risk-medium .ov-card-value { color: var(--med); }
+.ov-risk-safe .ov-card-value { color: #4ade80; }
+
+.overview-lists {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 8px 0 16px;
+}
+
+.ov-list-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.ov-list-section h4 {
+  margin: 0 0 8px;
   font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ov-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ov-table th {
+  text-align: left;
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ov-table td {
+  padding: 4px 8px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.ov-table tbody tr:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.ov-findings-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.ov-findings-section h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ov-findings-table td:nth-child(2) {
+  font-weight: 600;
+}
+
+.ov-empty {
+  color: var(--text-dim);
+  font-style: italic;
+  padding: 8px;
 }
 
 /* Responsive */

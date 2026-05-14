@@ -356,6 +356,9 @@
     trackProcess(a);
     trackFileAccess(a);
 
+    // Overview tracking
+    ovTrackAction(a);
+
     // Trim old rows
     while (actionList.children.length > MAX_ROWS) {
       actionList.removeChild(actionList.firstChild);
@@ -418,6 +421,9 @@
     if (findingAutoFollow) {
       scrollToBottom(findingList);
     }
+
+    // Overview tracking
+    ovTrackFinding(f);
 
     // Cross-reference: push finding into relevant access tabs with alert-level risk
     if (f.action_type && f.target) {
@@ -753,6 +759,9 @@
       statProcs.textContent = procTotal;
       procSummaryEl.textContent = procTotal + " processes observed, " + procSuspicious + " flagged";
 
+      // Overview
+      ovTrackProcRisk(bin, cmd, cls.risk);
+
       var tr = document.createElement("tr");
       var riskClass = "risk-" + cls.risk;
       var riskLabel = cls.risk === "critical" ? "🔴 CRITICAL" : cls.risk === "high" ? "🟠 HIGH" : cls.risk === "medium" ? "⚠ MEDIUM" : "✓ Safe";
@@ -875,6 +884,9 @@
     if (cls.risk !== "safe") fileSuspicious++;
     statFiles.textContent = fileTotal;
     fileSummaryEl.textContent = fileTotal + " file operations, " + fileSuspicious + " flagged";
+
+    // Overview
+    ovTrackFileRisk(path, op, cls.risk);
 
     var tr = document.createElement("tr");
     var opClass = "op-" + op;
@@ -1132,6 +1144,170 @@
   function escAttr(s) {
     return esc(s).replace(/"/g, "&quot;");
   }
+
+  // --- Overview tab ---
+  var ovActions = document.getElementById("ov-actions");
+  var ovFindings = document.getElementById("ov-findings");
+  var ovCritical = document.getElementById("ov-critical");
+  var ovHigh = document.getElementById("ov-high");
+  var ovMedium = document.getElementById("ov-medium");
+  var ovLow = document.getElementById("ov-low");
+  var ovTopFiles = document.getElementById("ov-top-files");
+  var ovTopProcs = document.getElementById("ov-top-procs");
+  var ovTopTools = document.getElementById("ov-top-tools");
+  var ovFindingsList = document.getElementById("ov-findings-list");
+
+  var ovActionCount = 0;
+  var ovFindingCount = 0;
+  var ovSevCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+  var ovFileRisks = []; // {risk, path, op}
+  var ovProcRisks = []; // {risk, binary, command}
+  var ovToolCounts = {}; // tool -> count
+
+  var riskOrder = { critical: 0, high: 1, medium: 2, suspicious: 3, safe: 4 };
+
+  function ovTrackAction(a) {
+    ovActionCount++;
+    ovActions.textContent = ovActionCount;
+
+    // Track tool counts
+    var tool = a.tool || "unknown";
+    ovToolCounts[tool] = (ovToolCounts[tool] || 0) + 1;
+    ovRenderTopTools();
+  }
+
+  function ovTrackFinding(f) {
+    ovFindingCount++;
+    ovFindings.textContent = ovFindingCount;
+
+    var sev = f.severity || "LOW";
+    if (ovSevCounts[sev] !== undefined) ovSevCounts[sev]++;
+    ovCritical.textContent = ovSevCounts.CRITICAL;
+    ovHigh.textContent = ovSevCounts.HIGH;
+    ovMedium.textContent = ovSevCounts.MEDIUM;
+    ovLow.textContent = ovSevCounts.LOW;
+
+    ovAppendFinding(f);
+  }
+
+  function ovTrackFileRisk(path, op, risk) {
+    ovFileRisks.push({ risk: risk, path: path, op: op });
+    ovRenderTopFiles();
+  }
+
+  function ovTrackProcRisk(binary, command, risk) {
+    ovProcRisks.push({ risk: risk, binary: binary, command: command });
+    ovRenderTopProcs();
+  }
+
+  function ovRenderTopFiles() {
+    var sorted = ovFileRisks.slice().sort(function (a, b) {
+      return (riskOrder[a.risk] || 9) - (riskOrder[b.risk] || 9);
+    });
+    var top5 = sorted.slice(0, 5);
+    ovTopFiles.innerHTML = "";
+    if (top5.length === 0) {
+      ovTopFiles.innerHTML = '<tr><td colspan="3" class="ov-empty">No file access yet</td></tr>';
+      return;
+    }
+    top5.forEach(function (f) {
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td><span class="risk-' + esc(f.risk) + '">' + esc(f.risk) + '</span></td>'
+        + '<td title="' + escAttr(f.path) + '">' + esc(f.path) + '</td>'
+        + '<td>' + esc(f.op) + '</td>';
+      ovTopFiles.appendChild(tr);
+    });
+  }
+
+  function ovRenderTopProcs() {
+    var sorted = ovProcRisks.slice().sort(function (a, b) {
+      return (riskOrder[a.risk] || 9) - (riskOrder[b.risk] || 9);
+    });
+    var top5 = sorted.slice(0, 5);
+    ovTopProcs.innerHTML = "";
+    if (top5.length === 0) {
+      ovTopProcs.innerHTML = '<tr><td colspan="3" class="ov-empty">No processes yet</td></tr>';
+      return;
+    }
+    top5.forEach(function (p) {
+      var tr = document.createElement("tr");
+      var cmd = p.command || "";
+      if (cmd.length > 60) cmd = cmd.substring(0, 60) + "...";
+      tr.innerHTML = '<td><span class="risk-' + esc(p.risk) + '">' + esc(p.risk) + '</span></td>'
+        + '<td>' + esc(p.binary) + '</td>'
+        + '<td title="' + escAttr(p.command) + '">' + esc(cmd) + '</td>';
+      ovTopProcs.appendChild(tr);
+    });
+  }
+
+  function ovRenderTopTools() {
+    var entries = Object.keys(ovToolCounts).map(function (k) {
+      return { tool: k, count: ovToolCounts[k] };
+    });
+    entries.sort(function (a, b) { return b.count - a.count; });
+    var top5 = entries.slice(0, 5);
+    ovTopTools.innerHTML = "";
+    if (top5.length === 0) {
+      ovTopTools.innerHTML = '<tr><td colspan="2" class="ov-empty">No tools yet</td></tr>';
+      return;
+    }
+    top5.forEach(function (t) {
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td>' + esc(t.tool) + '</td><td>' + t.count + '</td>';
+      ovTopTools.appendChild(tr);
+    });
+  }
+
+  function ovRenderFindings() {
+    ovFindingsList.innerHTML = '<tr><td colspan="5" class="ov-empty">No findings</td></tr>';
+  }
+
+  function ovAppendFinding(f) {
+    // Remove empty placeholder if present
+    var empty = ovFindingsList.querySelector(".ov-empty");
+    if (empty) empty.closest("tr").remove();
+
+    var tr = document.createElement("tr");
+    var ev = f.evidence || "";
+    if (ev.length > 60) ev = ev.substring(0, 60) + "...";
+    tr.innerHTML = '<td>' + esc(f.time) + '</td>'
+      + '<td class="sev-' + esc(f.severity) + '">' + esc(f.severity) + '</td>'
+      + '<td>' + esc(f.rule_id) + ' ' + esc(f.rule_name) + '</td>'
+      + '<td>' + esc(f.tool) + '</td>'
+      + '<td title="' + escAttr(f.evidence) + '">' + esc(ev) + '</td>';
+
+    // Insert sorted by severity: CRITICAL < HIGH < MEDIUM < LOW
+    var sevOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+    var fOrd = sevOrder[f.severity] !== undefined ? sevOrder[f.severity] : 9;
+    var inserted = false;
+    var rows = ovFindingsList.querySelectorAll("tr:not(.table-detail-row)");
+    for (var i = 0; i < rows.length; i++) {
+      var rowSev = rows[i].querySelector("td:nth-child(2)");
+      if (rowSev) {
+        var rowOrd = sevOrder[rowSev.textContent.trim()];
+        if (rowOrd === undefined) rowOrd = 9;
+        if (fOrd < rowOrd) {
+          ovFindingsList.insertBefore(tr, rows[i]);
+          inserted = true;
+          break;
+        }
+      }
+    }
+    if (!inserted) ovFindingsList.appendChild(tr);
+
+    var detail = {
+      rule_id: f.rule_id, rule_name: f.rule_name, severity: f.severity,
+      evidence: f.evidence, description: f.description, mitre: f.mitre,
+      tool: f.tool, target: f.target, action_type: f.action_type
+    };
+    attachTableDetail(tr, detail, 5);
+  }
+
+  // Initialize empty overview
+  ovRenderTopFiles();
+  ovRenderTopProcs();
+  ovRenderTopTools();
+  ovRenderFindings();
 
   // --- Load history for late-joining clients ---
   function loadHistory() {

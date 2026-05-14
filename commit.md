@@ -208,3 +208,23 @@ aigaze rule test rules/R100.yaml --should-match fixtures/trigger.jsonl --should-
 - Now correctly classified as medium risk
 
 ### Status: ✅ Ready to commit (awaiting approval)
+
+## Commit 10: Overview tab — summary dashboard as first tab
+
+### Files:
+- [x] `internal/web/static/index.html` — Overview tab with cards, top-5 lists, findings table; moved to first tab position
+- [x] `internal/web/static/style.css` — `.ov-card`, `.overview-cards`, `.overview-lists`, `.ov-table`, `.ov-findings-section` styles
+- [x] `internal/web/static/app.js` — `ovTrack*()` functions, `ovRender*()` renderers, hooks in `addAction`/`addFinding`/`trackFileAccess`/`trackProcess`
+
+### Layout:
+- **Cards row**: Actions, Findings, Critical (red), High (orange), Medium (yellow), Low (blue)
+- **3-column grid**: Top Riskiest Files, Top Riskiest Processes, Most Used Tools
+- **Full-width table**: All Findings sorted by severity
+
+### Tab order: Overview → Live Monitor → URL → Process → File → Tool
+
+### Verified:
+- `go build` ✅
+- Visual check in browser ✅
+
+### Status: ✅ Ready to commit (awaiting approval)
