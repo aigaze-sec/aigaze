@@ -1,0 +1,6 @@
+{"type":"session.start","timestamp":"2026-01-01T00:00:00Z","data":{"model":"test"}}
+{"type":"assistant.turn_start","timestamp":"2026-01-01T00:00:01Z","data":{"turnId":"t1"}}
+{"type":"assistant.message","timestamp":"2026-01-01T00:00:01Z","data":{"toolRequests":[{"name":"read_file","toolCallId":"c1","arguments":"{\"filePath\":\"/home/user/.ssh/id_rsa\",\"startLine\":1,\"endLine\":50}"}]}}
+{"type":"assistant.message","timestamp":"2026-01-01T00:00:02Z","data":{"toolRequests":[{"name":"read_file","toolCallId":"c2","arguments":"{\"filePath\":\"/home/user/.aws/credentials\",\"startLine\":1,\"endLine\":20}"}]}}
+{"type":"assistant.message","timestamp":"2026-01-01T00:00:03Z","data":{"toolRequests":[{"name":"read_file","toolCallId":"c3","arguments":"{\"filePath\":\"/home/user/project/.env\",\"startLine\":1,\"endLine\":30}"}]}}
+{"type":"assistant.turn_end","timestamp":"2026-01-01T00:00:04Z","data":{}}

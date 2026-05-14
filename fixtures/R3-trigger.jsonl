@@ -1,0 +1,6 @@
+{"type":"session.start","timestamp":"2026-01-01T00:00:00Z","data":{"model":"test"}}
+{"type":"assistant.turn_start","timestamp":"2026-01-01T00:00:01Z","data":{"turnId":"t1"}}
+{"type":"assistant.message","timestamp":"2026-01-01T00:00:01Z","data":{"toolRequests":[{"name":"create_file","toolCallId":"c1","arguments":"{\"filePath\":\"/home/user/project/config.go\",\"content\":\"package config\\n\\nvar apiKey = \\\"AKIAIOSFODNN7REALKEY\\\"\\n\"}"}]}}
+{"type":"assistant.message","timestamp":"2026-01-01T00:00:02Z","data":{"toolRequests":[{"name":"replace_string_in_file","toolCallId":"c2","arguments":"{\"filePath\":\"/home/user/project/auth.go\",\"oldString\":\"token := \\\"\\\"\",\"newString\":\"token := \\\"ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij\\\"\"}"}]}}
+{"type":"assistant.message","timestamp":"2026-01-01T00:00:03Z","data":{"toolRequests":[{"name":"create_file","toolCallId":"c3","arguments":"{\"filePath\":\"/home/user/project/key.pem\",\"content\":\"-----BEGIN RSA PRIVATE KEY-----\\nMIIEpAIBAAKCAQEA...\\n-----END RSA PRIVATE KEY-----\\n\"}"}]}}
+{"type":"assistant.turn_end","timestamp":"2026-01-01T00:00:04Z","data":{}}

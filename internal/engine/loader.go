@@ -87,7 +87,7 @@ func LoadExternalRules(dir string) ([]Rule, error) {
 		if err != nil {
 			return nil, fmt.Errorf("reading %s: %w", entry.Name(), err)
 		}
-		r, err := parseRuleBytes(data, entry.Name())
+		r, err := ParseRuleBytes(data, entry.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -142,7 +142,7 @@ func loadRulesFromFS(fsys fs.FS, root string) ([]Rule, error) {
 		if err != nil {
 			return fmt.Errorf("reading %s: %w", path, err)
 		}
-		r, err := parseRuleBytes(data, d.Name())
+		r, err := ParseRuleBytes(data, d.Name())
 		if err != nil {
 			return err
 		}
@@ -152,7 +152,8 @@ func loadRulesFromFS(fsys fs.FS, root string) ([]Rule, error) {
 	return rules, err
 }
 
-func parseRuleBytes(data []byte, filename string) (Rule, error) {
+// ParseRuleBytes parses a single YAML rule from raw bytes.
+func ParseRuleBytes(data []byte, filename string) (Rule, error) {
 	var ry RuleYAML
 	if err := yaml.Unmarshal(data, &ry); err != nil {
 		return Rule{}, fmt.Errorf("parsing %s: %w", filename, err)

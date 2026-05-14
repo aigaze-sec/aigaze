@@ -144,3 +144,34 @@
 - `aigaze scan` produces identical 36 findings ✅
 
 ### Status: ✅ Ready to commit (awaiting approval)
+
+## Commit 7: `aigaze rule test` + `aigaze rule list` + fixtures
+
+### Files:
+- [x] `cmd/aigaze/main.go` — `ruleCmd()` with `test` and `list` subcommands; `runRuleTest()` helper
+- [x] `internal/engine/engine.go` — `ScanSessionWithRules()` extracted from `ScanSession()` for single-rule testing
+- [x] `internal/engine/loader.go` — Exported `ParseRuleBytes()` (was `parseRuleBytes`)
+- [x] `fixtures/R1-trigger.jsonl` — reads .ssh/id_rsa, .aws/credentials, .env
+- [x] `fixtures/R1-safe.jsonl` — reads main.go, README.md
+- [x] `fixtures/R2-trigger.jsonl` — rm -rf /, curl|bash, base64 -d
+- [x] `fixtures/R2-safe.jsonl` — go build, go test
+- [x] `fixtures/R3-trigger.jsonl` — AKIA key, ghp_ token, RSA private key
+- [x] `fixtures/R3-safe.jsonl` — normal create_file, replace_string_in_file
+- [x] `fixtures/R5-trigger.jsonl` — external URLs (evil-exfil.xyz, cursor.com)
+- [x] `fixtures/R5-safe.jsonl` — localhost URLs only
+
+### Usage:
+```
+aigaze rule list
+aigaze rule test rules/R100.yaml --should-match fixtures/trigger.jsonl --should-not-match fixtures/safe.jsonl
+```
+
+### Verified:
+- `go build` ✅
+- `aigaze rule list` — shows 5 rules ✅
+- R1 test: PASS should-match (3 findings), PASS should-not-match (0) ✅
+- R2 test: PASS should-match (3 findings), PASS should-not-match (0) ✅
+- R3 test: PASS should-match (3 findings), PASS should-not-match (0) ✅
+- R5 test: PASS should-match (2 findings), PASS should-not-match (0) ✅
+
+### Status: ✅ Ready to commit (awaiting approval)

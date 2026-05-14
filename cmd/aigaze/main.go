@@ -30,6 +30,7 @@ func main() {
 	rootCmd.AddCommand(scanCmd())
 	rootCmd.AddCommand(watchCmd())
 	rootCmd.AddCommand(serveCmd())
+	rootCmd.AddCommand(ruleCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -279,6 +280,142 @@ Use --replay to serve a JSONL transcript file for offline analysis.`,
 	cmd.Flags().StringVar(&replayFile, "replay", "", "Replay a JSONL transcript file offline")
 	cmd.Flags().IntVar(&speed, "speed", 0, "Replay delay in ms between events (0 = instant)")
 	return cmd
+}
+
+// --- Rule commands ---
+
+func ruleCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "rule",
+		Short: "Manage and test detection rules",
+	}
+	cmd.AddCommand(ruleTestCmd())
+	cmd.AddCommand(ruleListCmd())
+	return cmd
+}
+
+func ruleTestCmd() *cobra.Command {
+	var shouldMatch string
+	var shouldNotMatch string
+
+	cmd := &cobra.Command{
+		Use:   "test <rule.yaml>",
+		Short: "Test a YAML rule against fixture transcripts",
+		Long: `Validate a detection rule by running it against should-match and
+should-not-match fixture transcripts.
+
+Example:
+  aigaze rule test rules/R100.yaml \
+    --should-match fixtures/R100-trigger.jsonl \
+    --should-not-match fixtures/R100-safe.jsonl`,
+		Args: cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			rulePath := args[0]
+			data, err := os.ReadFile(rulePath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading rule file: %v\n", err)
+				os.Exit(1)
+			}
+
+			rule, err := engine.ParseRuleBytes(data, filepath.Base(rulePath))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error parsing rule: %v\n", err)
+				os.Exit(1)
+			}
+
+			fmt.Printf("Testing rule %s (%s)\n", rule.ID, rule.Name)
+			fmt.Printf("  Check: %s  Severity: %s\n\n", rule.CheckType, rule.Severity)
+
+			passed := true
+
+			if shouldMatch != "" {
+				ok := runRuleTest(rule, shouldMatch, true)
+				if !ok {
+					passed = false
+				}
+			}
+
+			if shouldNotMatch != "" {
+				ok := runRuleTest(rule, shouldNotMatch, false)
+				if !ok {
+					passed = false
+				}
+			}
+
+			if shouldMatch == "" && shouldNotMatch == "" {
+				fmt.Fprintln(os.Stderr, "Provide --should-match and/or --should-not-match fixtures.")
+				os.Exit(1)
+			}
+
+			fmt.Println()
+			if passed {
+				fmt.Println("✅ All assertions passed.")
+			} else {
+				fmt.Println("❌ Some assertions failed.")
+				os.Exit(1)
+			}
+		},
+	}
+
+	cmd.Flags().StringVar(&shouldMatch, "should-match", "", "JSONL fixture that should trigger the rule")
+	cmd.Flags().StringVar(&shouldNotMatch, "should-not-match", "", "JSONL fixture that should NOT trigger the rule")
+	return cmd
+}
+
+func ruleListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List all loaded detection rules",
+		Run: func(cmd *cobra.Command, args []string) {
+			rules, err := engine.LoadAllRules()
+			if err != nil {
+				rules = engine.DefaultRules()
+			}
+			fmt.Printf("%-6s %-10s %-35s %-15s %s\n", "ID", "Severity", "Name", "Check", "MITRE")
+			fmt.Printf("%-6s %-10s %-35s %-15s %s\n", "------", "----------", "-----------------------------------", "---------------", "----------")
+			for _, r := range rules {
+				fmt.Printf("%-6s %-10s %-35s %-15s %s\n", r.ID, r.Severity, r.Name, r.CheckType, r.MITRETechnique)
+			}
+		},
+	}
+}
+
+func runRuleTest(rule engine.Rule, fixturePath string, expectMatch bool) bool {
+	session, err := parser.ParseTranscript(fixturePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  Error parsing %s: %v\n", fixturePath, err)
+		return false
+	}
+
+	result := engine.ScanSessionWithRules(session, nil, []engine.Rule{rule})
+	activeFindings := result.FindingCount()
+
+	label := "should-match"
+	if !expectMatch {
+		label = "should-not-match"
+	}
+
+	if expectMatch {
+		if activeFindings > 0 {
+			fmt.Printf("  PASS  %s → %d finding(s) detected (%s)\n", label, activeFindings, filepath.Base(fixturePath))
+			return true
+		}
+		fmt.Printf("  FAIL  %s → 0 findings, expected ≥1 (%s)\n", label, filepath.Base(fixturePath))
+		return false
+	}
+
+	// expect no match
+	if activeFindings == 0 {
+		fmt.Printf("  PASS  %s → 0 findings (%s)\n", label, filepath.Base(fixturePath))
+		return true
+	}
+	fmt.Printf("  FAIL  %s → %d finding(s), expected 0 (%s)\n", label, activeFindings, filepath.Base(fixturePath))
+	for _, f := range result.Findings {
+		if !f.Suppressed {
+			fmt.Printf("        → %s: %s\n", f.Tool, f.Evidence)
+		}
+	}
+	return false
 }
 
 // --- Helpers ---

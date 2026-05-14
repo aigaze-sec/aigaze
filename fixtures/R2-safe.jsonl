@@ -1,0 +1,5 @@
+{"type":"session.start","timestamp":"2026-01-01T00:00:00Z","data":{"model":"test"}}
+{"type":"assistant.turn_start","timestamp":"2026-01-01T00:00:01Z","data":{"turnId":"t1"}}
+{"type":"assistant.message","timestamp":"2026-01-01T00:00:01Z","data":{"toolRequests":[{"name":"run_in_terminal","toolCallId":"c1","arguments":"{\"command\":\"go build ./...\",\"explanation\":\"build project\",\"goal\":\"build\",\"mode\":\"sync\"}"}]}}
+{"type":"assistant.message","timestamp":"2026-01-01T00:00:02Z","data":{"toolRequests":[{"name":"run_in_terminal","toolCallId":"c2","arguments":"{\"command\":\"go test ./...\",\"explanation\":\"run tests\",\"goal\":\"test\",\"mode\":\"sync\"}"}]}}
+{"type":"assistant.turn_end","timestamp":"2026-01-01T00:00:03Z","data":{}}

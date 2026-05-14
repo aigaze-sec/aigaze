@@ -1,0 +1,5 @@
+{"type":"session.start","timestamp":"2026-01-01T00:00:00Z","data":{"model":"test"}}
+{"type":"assistant.turn_start","timestamp":"2026-01-01T00:00:01Z","data":{"turnId":"t1"}}
+{"type":"assistant.message","timestamp":"2026-01-01T00:00:01Z","data":{"toolRequests":[{"name":"read_file","toolCallId":"c1","arguments":"{\"filePath\":\"/home/user/project/main.go\",\"startLine\":1,\"endLine\":100}"}]}}
+{"type":"assistant.message","timestamp":"2026-01-01T00:00:02Z","data":{"toolRequests":[{"name":"read_file","toolCallId":"c2","arguments":"{\"filePath\":\"/home/user/project/README.md\",\"startLine\":1,\"endLine\":50}"}]}}
+{"type":"assistant.turn_end","timestamp":"2026-01-01T00:00:03Z","data":{}}

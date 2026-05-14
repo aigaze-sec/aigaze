@@ -168,6 +168,11 @@ func ScanSession(session *parser.Session, workspaceRoots []string) *ScanResult {
 		rules = DefaultRules()
 	}
 	_ = err
+	return ScanSessionWithRules(session, workspaceRoots, rules)
+}
+
+// ScanSessionWithRules scans a session against the given rules and returns findings.
+func ScanSessionWithRules(session *parser.Session, workspaceRoots []string, rules []Rule) *ScanResult {
 	result := &ScanResult{
 		SessionID: session.SessionID,
 		Model:     session.Model,
