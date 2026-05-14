@@ -1,0 +1,23 @@
+id: R2
+name: "Dangerous Terminal Command"
+description: "AI agent executed potentially dangerous terminal commands"
+severity: CRITICAL
+mitre_technique: "T1059"
+mitre_name: "Command and Scripting Interpreter"
+action_types:
+  - terminal_exec
+  - terminal_input
+check: pattern
+patterns:
+  - 'rm\s+-rf\s+/'
+  - 'chmod\s+777'
+  - 'curl\s+.*\|\s*sh'
+  - 'curl\s+.*\|\s*bash'
+  - 'wget\s+.*\|\s*sh'
+  - 'eval\s*\('
+  - 'base64\s+-d'
+  - 'nc\s+-l'
+  - 'ncat\s+'
+  - 'dd\s+if='
+  - 'mkfs\.'
+  - ':(){.*};:'

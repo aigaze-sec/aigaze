@@ -1,0 +1,12 @@
+id: R4
+name: "Out-of-Workspace File Access"
+description: "AI agent accessed files outside the current workspace"
+severity: MEDIUM
+mitre_technique: "T1083"
+mitre_name: "File and Directory Discovery"
+action_types:
+  - file_read
+  - file_create
+  - file_edit
+  - dir_list
+check: workspace_boundary

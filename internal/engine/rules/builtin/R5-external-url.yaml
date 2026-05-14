@@ -1,0 +1,9 @@
+id: R5
+name: "External URL Access"
+description: "AI agent accessed external URLs"
+severity: LOW
+mitre_technique: "T1071"
+mitre_name: "Application Layer Protocol"
+action_types:
+  - network_fetch
+check: url_allowlist
